@@ -1,4 +1,3 @@
-import "./globals.css";
-import SiteChrome from "./components/site-chrome";
-export const metadata={title:"PT. Tiga Serangkai Cahaya Selatan",description:"Telecommunication, fiber optic and connectivity solutions."};
-export default function Layout({children}){return <html lang="id"><body><SiteChrome>{children}</SiteChrome></body></html>}
+import "./globals.css";import SiteChrome from "./components/site-chrome";
+export const metadata={title:"TSCS — PT. Tiga Serangkai Cahaya Selatan",description:"Konektivitas fiber optic, business connectivity, fiber infrastructure, dan network solution untuk bisnis.",metadataBase:new URL("https://tscs-telecom.vercel.app")};
+export default function Layout({children}){return <html lang="id"><body>{<SiteChrome>{children}</SiteChrome>}</body></html>}
