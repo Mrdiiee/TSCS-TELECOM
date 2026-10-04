@@ -1,23 +1,3 @@
 "use client";
-
-import Link from "next/link";
-import { useEffect, useState } from "react";
-
-export default function SiteChrome({children}){
-  const [scrolled,setScrolled]=useState(false);
-  useEffect(()=>{
-    const onScroll=()=>setScrolled(window.scrollY>18);
-    onScroll();
-    window.addEventListener("scroll",onScroll,{passive:true});
-    return()=>window.removeEventListener("scroll",onScroll);
-  },[]);
-  return <><header className={`nav ${scrolled?"navScrolled":""}`}>
-    <Link href="/" className="brand"><span>TSCS</span><small>PT. TIGA SERANGKAI CAHAYA SELATAN</small></Link>
-    <nav>{[["Layanan","/layanan"],["Jaringan","/jaringan"],["Tentang Kami","/tentang-kami"],["Berita","/berita"],["Kontak","/kontak"]].map(([x,h])=><Link key={h} href={h}>{x}</Link>)}</nav>
-    <Link className="navCta" href="/kontak">Hubungi Kami <span>↗</span></Link>
-  </header><main>{children}</main><footer>
-    <div><b>PT. TIGA SERANGKAI CAHAYA SELATAN</b><p>Membangun konektivitas. Menguatkan infrastruktur.</p></div>
-    <div>Telecommunication • Fiber Optic • Connectivity</div>
-    <div>© {new Date().getFullYear()} TSCS</div>
-  </footer></>
-}
+import Link from "next/link";import {useEffect,useState} from "react";import LanguageSwitcher from "./language-switcher";import LoadingScreen from "./loading-screen";
+export default function SiteChrome({children}){const [scrolled,setScrolled]=useState(false);const [open,setOpen]=useState(false);useEffect(()=>{const f=()=>setScrolled(scrollY>18);f();addEventListener("scroll",f,{passive:true});return()=>removeEventListener("scroll",f)},[]);return <><LoadingScreen/><header className={"nav "+(scrolled?"navScrolled":"")}><Link href="/" className="brand"><span>TSCS</span><small>PT. TIGA SERANGKAI CAHAYA SELATAN</small></Link><nav>{[["Layanan","/layanan"],["Jaringan","/jaringan"],["Tentang Kami","/tentang-kami"],["Berita","/berita"],["Kontak","/kontak"]].map(([x,h])=><Link key={h} href={h}>{x}</Link>)}</nav><div className="navRight"><LanguageSwitcher/><Link className="navCta" href="/kontak">Konsultasi <span>↗</span></Link><button className="menuBtn" aria-label="Menu" onClick={()=>setOpen(!open)}><i/><i/><i/></button></div></header>{open&&<div className="mobileMenu">{[["Layanan","/layanan"],["Jaringan","/jaringan"],["Tentang Kami","/tentang-kami"],["Berita","/berita"],["Kontak","/kontak"]].map(([x,h])=><Link onClick={()=>setOpen(false)} key={h} href={h}>{x}<span>↗</span></Link>)}</div>}<main>{children}</main><footer><div><b>PT. TIGA SERANGKAI CAHAYA SELATAN</b><p>Membangun konektivitas. Menguatkan infrastruktur.</p></div><div>Telecommunication • Fiber Optic • Connectivity</div><div><Link href="/privacy">Privacy</Link> · <Link href="/terms">Terms</Link><br/>© {new Date().getFullYear()} TSCS</div></footer></>}
