@@ -1,0 +1,1 @@
+export default function sitemap(){const base="https://tscs-telecom.vercel.app";return ["/","/layanan","/jaringan","/tentang-kami","/berita","/kontak","/privacy","/terms"].map(path=>({url:base+path,lastModified:new Date()}))}
