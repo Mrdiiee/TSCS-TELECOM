@@ -1,0 +1,3 @@
+import Link from "next/link";
+const posts=[["fondasi-konektivitas-masa-depan","COMPANY","Fondasi Konektivitas Masa Depan"],["fiber-optic-tulang-punggung-digital","INSIGHT","Fiber Optic: Tulang Punggung Digital"],["teknologi-untuk-koneksi-lebih-baik","TECHNOLOGY","Teknologi untuk Koneksi Lebih Baik"]];
+export default function Page(){return <section className="page"><span className="eyebrow">NEWS & INSIGHTS</span><h1>Berita dan insight TSCS.</h1><div className="grid">{posts.map(([s,c,t])=><article className="card" key={s}><small>{c}</small><h2>{t}</h2><p>Insight dan perkembangan seputar konektivitas, teknologi, dan infrastruktur digital.</p><Link href={"/berita/"+s}>Baca artikel →</Link></article>)}</div></section>}
