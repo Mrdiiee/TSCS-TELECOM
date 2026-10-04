@@ -33,3 +33,47 @@
 .fiberSignal{opacity:.72}
 .fiberCursorGlow{opacity:.65}
 .fiberLabel{opacity:.5}
+
+/* Premium responsive composition */
+.heroHome{isolation:isolate}
+.heroHome:before{z-index:2;pointer-events:none}
+.heroHome:after{z-index:4;height:30%;background:linear-gradient(to bottom,rgba(5,8,23,0),rgba(5,8,23,.82) 72%,var(--bg) 100%)}
+@media(min-width:901px){
+  .heroHome{min-height:820px;padding-top:150px;padding-bottom:110px}
+  .heroCopy{max-width:720px}
+  .fiberNetworkHero{opacity:1}
+  .fiberAtmosphere{opacity:.95}
+  .fiberNetworkSvg{left:42%;width:70%;height:100%;opacity:.9}
+  .fiberCursorGlow{display:block}
+}
+@media(max-width:900px){
+  .heroHome{min-height:760px;display:flex;align-items:center;padding:125px 7vw 105px;background:radial-gradient(circle at 70% 38%,#123a8c20,transparent 45%)}
+  .heroCopy{width:100%;max-width:620px;margin:0;z-index:6}
+  .heroCopy h1{font-size:clamp(42px,8.8vw,64px);line-height:1.02;margin:18px 0}
+  .heroCopy p{font-size:15px;line-height:1.7;max-width:540px}
+  .actions{flex-wrap:wrap;margin-top:26px}
+  .fiberNetworkHero{opacity:1}
+  .fiberAtmosphere{opacity:.9;background:radial-gradient(circle at 72% 38%,rgba(34,111,255,.19),transparent 38%),radial-gradient(circle at 28% 78%,rgba(113,54,220,.12),transparent 38%),linear-gradient(145deg,rgba(2,4,11,.98),rgba(5,14,30,.78),rgba(3,6,17,.98))!important}
+  .fiberNetworkSvg{width:125%;height:100%;left:17%;top:0;opacity:.48;transform:scale(1.05)}
+  .fiberGlowPaths path{stroke-width:9;opacity:.1}
+  .fiberCorePaths path{stroke-width:1.5;opacity:.6}
+  .fiberNodes circle{opacity:.55}
+  .fiberParticles i{opacity:.35}
+  .fiberSignal{opacity:.5}
+  .fiberCursorGlow{display:none}
+  .fiberLabel{right:18px;bottom:22px;opacity:.32}
+}
+@media(max-width:560px){
+  .heroHome{min-height:720px;padding:116px 6vw 88px;align-items:center}
+  .heroCopy{max-width:100%}
+  .heroCopy .eyebrow{font-size:8px;letter-spacing:.16em}
+  .heroCopy h1{font-size:clamp(38px,10.5vw,50px);letter-spacing:-.05em;margin:15px 0 17px}
+  .heroCopy p{font-size:14px;line-height:1.65;max-width:100%;color:#aab7d0}
+  .actions{gap:9px;margin-top:22px}
+  .btn{padding:13px 17px;font-size:12px}
+  .btn.ghost{background:#ffffff0a}
+  .fiberNetworkSvg{width:165%;left:2%;top:4%;height:96%;opacity:.34}
+  .fiberAtmosphere{background:radial-gradient(circle at 78% 38%,rgba(34,111,255,.16),transparent 40%),radial-gradient(circle at 20% 82%,rgba(113,54,220,.1),transparent 40%),linear-gradient(145deg,rgba(2,4,11,.99),rgba(5,14,30,.82),rgba(3,6,17,.99))!important}
+  .fiberLabel{display:none}
+  .heroHome:after{height:26%}
+}
