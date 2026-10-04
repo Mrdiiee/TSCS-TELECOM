@@ -19,3 +19,17 @@
 .fiberLabel{position:absolute;right:24px;bottom:22px;display:grid;gap:4px;text-align:right;color:#83b4ff;font-size:9px;letter-spacing:.2em}.fiberLabel small{color:#52698f;font-size:7px;letter-spacing:.16em}
 @keyframes fiberFlow{to{stroke-dashoffset:-150}}@keyframes fiberNodePulse{50%{transform:scale(1.45);opacity:.65}}@keyframes particleDrift{0%{transform:translate(0,25px);opacity:0}20%{opacity:.8}100%{transform:translate(35px,-110px);opacity:0}}@keyframes fiberSignalMove{0%{transform:translate(0,15px);opacity:0}15%{opacity:1}70%{transform:translate(90px,-50px);opacity:1}100%{transform:translate(155px,-82px);opacity:0}}
 @media(max-width:560px){.fiberLabel{right:14px;bottom:14px}.fiberLabel small{display:none}}
+
+/* Seamless hero integration */
+.heroHome{position:relative;overflow:hidden;background:#02050d}
+.heroHome:after{content:"";position:absolute;left:0;right:0;bottom:-1px;height:34%;z-index:3;pointer-events:none;background:linear-gradient(to bottom,rgba(2,5,13,0),#07101f 78%,var(--bg) 100%)}
+.heroCopy{position:relative;z-index:6}
+.fiberNetworkHero{position:absolute!important;inset:0!important;width:100%!important;height:100%!important;z-index:1!important;background:transparent!important;overflow:hidden}
+.fiberAtmosphere{background:radial-gradient(circle at 70% 42%,rgba(34,111,255,.16),transparent 34%),radial-gradient(circle at 35% 72%,rgba(113,54,220,.10),transparent 36%),linear-gradient(120deg,rgba(2,4,11,.98) 0%,rgba(5,14,30,.82) 55%,rgba(3,6,17,.96) 100%)!important}
+.fiberNetworkSvg{opacity:.82;transform:scale(1.03);transform-origin:center}
+.fiberGlowPaths path{stroke-width:8;opacity:.13}.fiberCorePaths path{stroke-width:1.6;opacity:.72}
+.fiberNodes circle{opacity:.7}
+.fiberParticles i{opacity:.55}
+.fiberSignal{opacity:.72}
+.fiberCursorGlow{opacity:.65}
+.fiberLabel{opacity:.5}
