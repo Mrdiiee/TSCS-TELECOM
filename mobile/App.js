@@ -9,18 +9,22 @@ export default function App() {
   const webViewRef = useRef(null);
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
+  const [canGoBack, setCanGoBack] = useState(false);
 
   React.useEffect(() => {
     const handler = () => {
       if (webViewRef.current) {
-        webViewRef.current.goBack();
-        return true;
+        if (canGoBack) {
+          webViewRef.current.goBack();
+          return true;
+        }
+        return false;
       }
       return false;
     };
     const sub = BackHandler.addEventListener("hardwareBackPress", handler);
     return () => sub.remove();
-  }, []);
+  }, [canGoBack]);
 
   if (failed) {
     return (
@@ -47,6 +51,7 @@ export default function App() {
         setSupportMultipleWindows={false}
         onLoadStart={() => { setLoading(true); setFailed(false); }}
         onLoadEnd={() => setLoading(false)}
+        onNavigationStateChange={(state) => setCanGoBack(state.canGoBack)}
         onError={() => { setLoading(false); setFailed(true); }}
         onShouldStartLoadWithRequest={(request) => {
           if (request.url.startsWith("tel:") || request.url.startsWith("mailto:") || request.url.startsWith("whatsapp:")) {
