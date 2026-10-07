@@ -1,0 +1,55 @@
+name: Android Production AAB
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mobile
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Generate PNG icon
+        working-directory: .
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y librsvg2-bin
+          rsvg-convert -w 1024 -h 1024 mobile/assets/icon.svg -o mobile/assets/icon.png
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: mobile/package.json
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build Android production AAB
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: npx eas-cli build --platform android --profile production --non-interactive
+
+      - name: Download AAB from EAS
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: |
+          URL=$(npx eas-cli build:list --platform android --status finished --limit 1 --json | node -e "let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{const a=JSON.parse(s); console.log(a[0]?.artifacts?.buildUrl||'')})")
+          test -n "$URL"
+          curl -L "$URL" -o TSCS-Telekom-production.aab
+
+      - name: Upload AAB artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: TSCS-Telekom-production-aab
+          path: mobile/TSCS-Telekom-production.aab
+          if-no-files-found: error
