@@ -14,10 +14,10 @@
       "package": "id.tscstelekom.app",
       "versionCode": 1,
       "adaptiveIcon": {
-        "foregroundImage": "./assets/icon.svg",
+        "foregroundImage": "./assets/icon.png",
         "backgroundColor": "#100d2d"
       }
     },
-    "icon": "./assets/icon.svg"
+    "icon": "./assets/icon.png"
   }
 }
