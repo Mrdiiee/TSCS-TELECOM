@@ -12,7 +12,12 @@
     },
     "android": {
       "package": "id.tscstelekom.app",
-      "versionCode": 1
-    }
+      "versionCode": 1,
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/icon.png",
+        "backgroundColor": "#100d2d"
+      }
+    },
+    "icon": "./assets/icon.png"
   }
 }
