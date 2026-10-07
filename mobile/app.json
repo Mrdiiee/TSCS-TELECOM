@@ -10,8 +10,5 @@
       "versionCode": 1,
       "edgeToEdgeEnabled": true
     },
-    "plugins": [
-      "react-native-webview"
-    ]
   }
 }
