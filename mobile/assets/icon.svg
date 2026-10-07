@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+<defs>
+ <linearGradient id="g" x1="0" y1="1" x2="1" y2="0"><stop stop-color="#251cff"/><stop offset=".48" stop-color="#a900ff"/><stop offset="1" stop-color="#ff22cf"/></linearGradient>
+ <linearGradient id="g2" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#0627ff"/><stop offset=".55" stop-color="#8c00ff"/><stop offset="1" stop-color="#ff20b7"/></linearGradient>
+</defs>
+<rect width="1024" height="1024" rx="170" fill="#100d2d"/>
+<g fill="none" stroke-linecap="round" stroke-linejoin="round">
+ <path d="M250 360 C320 235 475 250 520 365 C555 455 495 570 395 590 C295 610 215 535 235 450 C255 365 350 320 430 350 C505 378 540 455 605 470 C690 490 790 450 785 370 C780 295 690 265 625 300 C560 335 540 405 585 455 C635 515 725 525 780 470" stroke="url(#g2)" stroke-width="54"/>
+ <path d="M260 365 C325 260 455 275 500 365 C535 435 485 525 405 545 C325 565 260 510 265 450 C270 395 330 355 395 365 C465 375 510 450 575 475 C660 510 770 470 775 385" stroke="url(#g)" stroke-width="25" opacity=".95"/>
+</g>
+<text x="512" y="690" text-anchor="middle" font-family="Georgia,serif" font-size="78" font-weight="700" letter-spacing="9" fill="#fff">RAZA.NET</text>
+<text x="512" y="745" text-anchor="middle" font-family="Arial,sans-serif" font-size="25" letter-spacing="13" fill="#d8d1ff">FIBER ACCES</text>
+<rect x="420" y="790" width="184" height="68" rx="34" fill="url(#g)"/>
+<rect x="431" y="801" width="162" height="46" rx="23" fill="#100d2d"/>
+<text x="512" y="834" text-anchor="middle" font-family="Arial,sans-serif" font-size="28" font-weight="700" fill="#fff">Wi Fi</text>
+</svg>
