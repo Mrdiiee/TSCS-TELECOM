@@ -3,12 +3,16 @@
     "name": "TSCS Telekom",
     "slug": "tscs-telecom",
     "version": "1.0.0",
+    "description": "Aplikasi resmi TSCS Telekom untuk mengenal layanan telekomunikasi, jaringan, infrastruktur fiber optic, dan menghubungi tim TSCS.",
     "orientation": "portrait",
     "userInterfaceStyle": "dark",
+    "scheme": "tscs",
+    "splash": {
+      "backgroundColor": "#05070b"
+    },
     "android": {
       "package": "id.tscstelekom.app",
-      "versionCode": 1,
-      "edgeToEdgeEnabled": true
-    },
+      "versionCode": 1
+    }
   }
 }
