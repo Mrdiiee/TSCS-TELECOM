@@ -1,0 +1,17 @@
+{
+  "expo": {
+    "name": "TSCS Telekom",
+    "slug": "tscs-telecom",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "android": {
+      "package": "id.tscstelekom.app",
+      "versionCode": 1,
+      "edgeToEdgeEnabled": true
+    },
+    "plugins": [
+      "react-native-webview"
+    ]
+  }
+}
