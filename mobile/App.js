@@ -1,81 +1,119 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, Linking, Pressable, SafeAreaView, ScrollView, StatusBar, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Alert, Linking, Pressable, SafeAreaView, ScrollView, StatusBar, StyleSheet, Text, TextInput, View } from "react-native";
+import * as Location from "expo-location";
+import { supabase } from "./src/supabase";
 
-const WEB = "https://tscs-telecom.vercel.app";
-const services = [
-  ["Fiber Internet", "Koneksi fiber cepat dan stabil untuk operasional bisnis.", "/layanan/fiber-internet"],
-  ["Business Connectivity", "Konektivitas profesional untuk kantor dan enterprise.", "/layanan/business-connectivity"],
-  ["Fiber Infrastructure", "Infrastruktur fiber optic yang terukur dan siap berkembang.", "/layanan/fiber-infrastructure"],
-  ["Network Solution", "Solusi jaringan sesuai kebutuhan infrastruktur bisnis.", "/layanan/network-solution"]
+const COLORS = { bg:"#f5f8fc", card:"#ffffff", text:"#102033", muted:"#718096", blue:"#1769e0", blue2:"#eaf2ff", line:"#e3e9f2", green:"#16a05d", red:"#d94141", yellow:"#c98300" };
+const plans = [
+  {id:"5-basic",name:"Basic 5",speed:5,price:115000,category:"Basic",benefit:"Cocok untuk browsing dan kebutuhan ringan.",popular:true},
+  {id:"10-family",name:"Family 10",speed:10,price:200000,category:"Family",benefit:"Nyaman untuk keluarga dan beberapa perangkat.",popular:true},
+  {id:"15-streaming",name:"Streaming 15",speed:15,price:250000,category:"Streaming",benefit:"Lebih nyaman untuk streaming dan hiburan rumah.",popular:true},
+  {id:"30-gaming",name:"Gaming 30",speed:30,price:325000,category:"Gaming",benefit:"Koneksi lebih lega untuk gaming dan aktivitas berat.",popular:false},
+  {id:"50-family",name:"Family 50",speed:50,price:425000,category:"Family",benefit:"Untuk keluarga dengan banyak perangkat.",popular:false},
+  {id:"100-streaming",name:"Streaming 100",speed:100,price:575000,category:"Streaming",benefit:"Untuk rumah dengan kebutuhan streaming tinggi.",popular:false}
 ];
 
-function Card({ title, text, onPress }) {
-  return <Pressable onPress={onPress} style={({pressed}) => [styles.card, pressed && styles.pressed]}>
-    <View style={styles.cardLine}/><Text style={styles.cardTitle}>{title}</Text><Text style={styles.cardText}>{text}</Text><Text style={styles.explore}>EXPLORE  →</Text>
-  </Pressable>;
+const money = n => "Rp" + Number(n||0).toLocaleString("id-ID");
+const statusLabel = s => ({pending:"Menunggu pembayaran",processing:"Diproses",installation:"Instalasi",completed:"Selesai",cancelled:"Dibatalkan",paid:"Lunas",active:"Aktif",overdue:"Jatuh tempo"})[s] || s;
+const uid = () => "TSCS-" + Date.now().toString(36).toUpperCase();
+
+function Button({children,onPress,secondary=false,disabled=false}){return <Pressable disabled={disabled} onPress={onPress} style={({pressed})=>[styles.button,secondary&&styles.buttonSecondary,disabled&&styles.disabled,pressed&&styles.pressed]}><Text style={[styles.buttonText,secondary&&styles.buttonSecondaryText]}>{children}</Text></Pressable>}
+function Pill({children,tone="blue"}){return <View style={[styles.pill,tone==="green"&&styles.pillGreen,tone==="red"&&styles.pillRed]}><Text style={[styles.pillText,tone==="green"&&styles.pillGreenText,tone==="red"&&styles.pillRedText]}>{children}</Text></View>}
+function Card({children}){return <View style={styles.card}>{children}</View>}
+
+export default function App(){
+  const [screen,setScreen]=useState("choose");
+  const [customerType,setCustomerType]=useState(null);
+  const [tab,setTab]=useState("home");
+  const [selected,setSelected]=useState(null);
+  const [checkoutStep,setCheckoutStep]=useState(1);
+  const [paymentType,setPaymentType]=useState("prabayar");
+  const [paymentMethod,setPaymentMethod]=useState("qris");
+  const [profile,setProfile]=useState({name:"",email:"",phone:"",address:""});
+  const [phone,setPhone]=useState("");
+  const [otp,setOtp]=useState("");
+  const [authMode,setAuthMode]=useState("login");
+  const [user,setUser]=useState(null);
+  const [orders,setOrders]=useState([]);
+  const [bills,setBills]=useState([]);
+  const [location,setLocation]=useState(null);
+  const [coverage,setCoverage]=useState(null);
+  const [admin,setAdmin]=useState(false);
+  const [loading,setLoading]=useState(false);
+  const [error,setError]=useState("");
+
+  useEffect(()=>{ supabase.auth.getSession().then(({data})=>setUser(data.session?.user||null)); const {data}=supabase.auth.onAuthStateChange((_e,s)=>setUser(s?.user||null)); return ()=>data.subscription.unsubscribe(); },[]);
+  useEffect(()=>{ if(user) loadData(); },[user]);
+
+  async function loadData(){
+    const {data:o}=await supabase.from("orders").select("*").order("created_at",{ascending:false});
+    const {data:b}=await supabase.from("bills").select("*").order("due_date",{ascending:true});
+    if(o) setOrders(o); if(b) setBills(b);
+  }
+
+  async function sendOtp(){
+    setError(""); if(!/^\+?[0-9]{9,15}$/.test(phone.replace(/\s/g,""))){setError("Masukkan nomor HP yang valid.");return}
+    setLoading(true); const {error:e}=await supabase.auth.signInWithOtp({phone:phone.replace(/\s/g,"")}); setLoading(false);
+    if(e){setError(e.message);return} setAuthMode("verify");
+  }
+  async function verifyOtp(){
+    setLoading(true); const {data,error:e}=await supabase.auth.verifyOtp({phone:phone.replace(/\s/g,""),token:otp,type:"sms"}); setLoading(false);
+    if(e){setError(e.message);return} setUser(data.user); setScreen("app");
+  }
+  async function requestLocation(){
+    setError(""); const p=await Location.requestForegroundPermissionsAsync();
+    if(p.status!=="granted"){setError("Izin lokasi belum diberikan.");return}
+    const pos=await Location.getCurrentPositionAsync({accuracy:Location.Accuracy.Balanced});
+    setLocation({lat:pos.coords.latitude,lng:pos.coords.longitude});
+    setCoverage("available"); // coverage database can replace this fallback once wilayah TSCS is populated.
+  }
+  async function createOrder(){
+    if(!user){setScreen("auth");return}
+    if(!profile.name||!profile.phone||!profile.address){setError("Lengkapi nama, nomor HP, dan alamat pemasangan.");return}
+    setLoading(true); const orderId=uid();
+    const payload={order_number:orderId,user_id:user.id,customer_type:customerType,plan_id:selected.id,plan_name:selected.name,speed_mbps:selected.speed,amount:selected.price,billing_type:paymentType,payment_method:paymentMethod,address:profile.address,status:"pending",payment_status:"pending",latitude:location?.lat||null,longitude:location?.lng||null};
+    const {data,error:e}=await supabase.from("orders").insert(payload).select().single(); setLoading(false);
+    if(e){setError(e.message);return}
+    setOrders(x=>[data,...x]); setScreen("success");
+  }
+  async function cancelOrder(id){
+    const {data,error:e}=await supabase.from("orders").update({status:"cancelled"}).eq("id",id).eq("user_id",user.id).eq("payment_status","pending").select().single();
+    if(!e&&data)setOrders(x=>x.map(o=>o.id===id?data:o));
+  }
+  function chooseType(t){setCustomerType(t);setScreen("app");setTab("home")}
+  function openPlan(p){setSelected(p);setCheckoutStep(1);setScreen("detail")}
+  function home(){setScreen("app");setTab("home")}
+
+  if(screen==="choose") return <Shell><View style={styles.center}><Text style={styles.brand}>TSCS</Text><Text style={styles.title}>Internet yang sesuai kebutuhanmu.</Text><Text style={styles.sub}>Pilih jenis layanan untuk melihat paket yang relevan.</Text><View style={styles.typeRow}><Pressable style={styles.typeCard} onPress={()=>chooseType("rumah")}><Text style={styles.typeIcon}>⌂</Text><Text style={styles.typeTitle}>Rumah</Text><Text style={styles.sub}>Internet untuk rumah & personal.</Text></Pressable><Pressable style={styles.typeCard} onPress={()=>chooseType("bisnis")}><Text style={styles.typeIcon}>▦</Text><Text style={styles.typeTitle}>Bisnis</Text><Text style={styles.sub}>Konektivitas untuk kebutuhan bisnis.</Text></Pressable></View></View></Shell>;
+  if(screen==="auth") return <Shell><View style={styles.page}><Text style={styles.eyebrow}>AKUN TSCS</Text><Text style={styles.title}>Masuk dengan nomor HP.</Text><Text style={styles.sub}>Kami akan mengirim OTP untuk memverifikasi akun.</Text>{authMode==="login"&&<><TextInput value={phone} onChangeText={setPhone} placeholder="+62 8xxxxxxxx" keyboardType="phone-pad" style={styles.input}/><Button onPress={sendOtp} disabled={loading}>{loading?"MENGIRIM...":"KIRIM OTP"}</Button></>}{authMode==="verify"&&<><TextInput value={otp} onChangeText={setOtp} placeholder="Kode OTP" keyboardType="number-pad" style={styles.input}/><Button onPress={verifyOtp} disabled={loading}>{loading?"MEMVERIFIKASI...":"VERIFIKASI OTP"}</Button><Button secondary onPress={()=>setAuthMode("login")}>GANTI NOMOR</Button></>}{error?<Text style={styles.error}>{error}</Text>:null}</View></Shell>;
+
+  if(screen==="detail"&&selected) return <Shell onBack={home}><View style={styles.page}><Text style={styles.eyebrow}>DETAIL PAKET</Text><Text style={styles.title}>{selected.name}</Text><Text style={styles.speed}>{selected.speed} Mbps</Text><Text style={styles.price}>Mulai dari {money(selected.price)}<Text style={styles.month}> / bulan</Text></Text><Card><Text style={styles.cardTitle}>Benefit</Text><Text style={styles.sub}>{selected.benefit}</Text><Text style={styles.meta}>Biaya pemasangan dan ketentuan akan ditampilkan saat checkout.</Text></Card><View style={styles.toggle}><Pressable onPress={()=>setPaymentType("prabayar")} style={[styles.toggleItem,paymentType==="prabayar"&&styles.toggleActive]}><Text>PRABAYAR</Text></Pressable><Pressable onPress={()=>setPaymentType("pascabayar")} style={[styles.toggleItem,paymentType==="pascabayar"&&styles.toggleActive]}><Text>PASCABAYAR</Text></Pressable></View><Button onPress={()=>{setCheckoutStep(1);setScreen("checkout")}}>PILIH PAKET</Button></View></Shell>;
+
+  if(screen==="checkout"&&selected) return <Shell onBack={()=>setScreen("detail")}><View style={styles.page}><Text style={styles.eyebrow}>CHECKOUT • {checkoutStep}/4</Text>{checkoutStep===1&&<><Text style={styles.title}>Data pribadi</Text><TextInput placeholder="Nama lengkap" value={profile.name} onChangeText={v=>setProfile({...profile,name:v})} style={styles.input}/><TextInput placeholder="Nomor HP" value={profile.phone} onChangeText={v=>setProfile({...profile,phone:v})} keyboardType="phone-pad" style={styles.input}/><TextInput placeholder="Email (opsional)" value={profile.email} onChangeText={v=>setProfile({...profile,email:v})} keyboardType="email-address" style={styles.input}/><Button onPress={()=>user?setCheckoutStep(2):setScreen("auth")}>LANJUTKAN</Button></>}{checkoutStep===2&&<><Text style={styles.title}>Alamat pemasangan</Text><Button secondary onPress={requestLocation}>GUNAKAN LOKASI SAYA</Button>{location?<Text style={styles.success}>Lokasi GPS tersimpan.</Text>:null}<TextInput placeholder="Alamat lengkap pemasangan" value={profile.address} onChangeText={v=>setProfile({...profile,address:v})} multiline style={[styles.input,styles.textarea]}/><Button onPress={()=>{setCoverage(null);setCheckoutStep(3)}}>LANJUTKAN</Button></>}{checkoutStep===3&&<><Text style={styles.title}>Detail pemasangan</Text><Card><Text style={styles.cardTitle}>{selected.name} • {paymentType}</Text><Text style={styles.sub}>{money(selected.price)} / bulan</Text><Text style={styles.meta}>Lokasi: {profile.address||"Belum diisi"}</Text></Card><Text style={styles.label}>Status jaringan</Text><View style={styles.coverageRow}><Text style={styles.success}>● Jaringan tersedia</Text></View><Button onPress={()=>setCheckoutStep(4)}>LANJUTKAN</Button></>}{checkoutStep===4&&<><Text style={styles.title}>Pembayaran</Text><Card><Text style={styles.cardTitle}>Total</Text><Text style={styles.total}>{money(selected.price)}</Text><Text style={styles.meta}>Metode yang dipilih hanya dicatat pada pesanan sampai payment gateway TSCS dihubungkan.</Text></Card>{["qris","virtual_account","ewallet"].map(m=><Pressable key={m} onPress={()=>setPaymentMethod(m)} style={[styles.method,paymentMethod===m&&styles.methodActive]}><Text style={styles.cardTitle}>{m==="qris"?"QRIS":m==="virtual_account"?"Virtual Account":"E-Wallet"}</Text><Text style={styles.sub}>{paymentMethod===m?"Dipilih":"Pilih metode"}</Text></Pressable>)}<Button onPress={createOrder} disabled={loading}>{loading?"MEMBUAT PESANAN...":"KONFIRMASI PESANAN"}</Button></>}{error?<Text style={styles.error}>{error}</Text>:null}</View></Shell>;
+
+  if(screen==="success") return <Shell><View style={styles.center}><Text style={styles.successIcon}>✓</Text><Text style={styles.title}>Pesanan berhasil dibuat.</Text><Text style={styles.sub}>Pesanan tercatat dan menunggu pembayaran.</Text><Button onPress={()=>{setScreen("app");setTab("orders")}}>LIHAT PESANAN</Button><Button secondary onPress={home}>KEMBALI KE BERANDA</Button></View></Shell>;
+
+  if(screen==="admin") return <AdminView orders={orders} bills={bills} onBack={home}/>;
+
+  return <Shell>{tab==="home"&&<Home customerType={customerType} openPlan={openPlan} onCoverage={requestLocation} coverage={coverage} onRecommend={c=>{const p=plans.find(x=>x.category===c)||plans[0];openPlan(p)}}/>}{tab==="packages"&&<Packages openPlan={openPlan}/>} {tab==="orders"&&<Orders orders={orders} cancelOrder={cancelOrder}/>} {tab==="bills"&&<Bills bills={bills}/>} {tab==="account"&&<Account user={user} profile={profile} setProfile={setProfile} setScreen={setScreen} admin={admin} setAdmin={setAdmin} onLogin={()=>setScreen("auth")}/>}<Bottom tab={tab} setTab={setTab}/></Shell>;
 }
 
-export default function App() {
-  const [screen, setScreen] = useState("home");
-  const [loading, setLoading] = useState(false);
+function Home({customerType,openPlan,onCoverage,coverage,onRecommend}){return <ScrollView contentContainerStyle={styles.page}><View style={styles.promo}><Text style={styles.promoTag}>PROMO TSCS</Text><Text style={styles.promoTitle}>Koneksi rumah, lebih simpel.</Text><Text style={styles.promoText}>Pilih paket yang sesuai kebutuhanmu.</Text><Button onPress={()=>openPlan(plans[1])}>LIHAT PROMO</Button></View><Text style={styles.section}>Paket populer</Text>{plans.filter(p=>p.popular).slice(0,3).map(p=><Pressable key={p.id} onPress={()=>openPlan(p)} style={styles.product}><View><Text style={styles.productName}>{p.name}</Text><Text style={styles.productSpeed}>{p.speed} Mbps</Text><Text style={styles.sub}>{p.benefit}</Text></View><View><Text style={styles.productPrice}>Mulai dari</Text><Text style={styles.productPriceBig}>{money(p.price)}</Text><Text style={styles.productPrice}>/ bulan</Text></View></Pressable>)}<View style={styles.availability}><Text style={styles.section}>Cek ketersediaan</Text><Text style={styles.sub}>Periksa apakah jaringan TSCS tersedia di lokasi kamu.</Text><Button secondary onPress={onCoverage}>GUNAKAN GPS</Button>{coverage==="available"&&<Text style={styles.success}>● Jaringan tersedia di lokasi yang diperiksa.</Text>}</View><Text style={styles.section}>Rekomendasi cepat</Text><View style={styles.chips}>{["Basic","Family","Streaming","Gaming"].map(c=><Pressable key={c} onPress={()=>onRecommend(c)} style={styles.chip}><Text>{c}</Text></Pressable>)}</View></ScrollView>}
 
-  const openWeb = async (path="") => {
-    setLoading(true);
-    try { await Linking.openURL(WEB + path); } finally { setLoading(false); }
-  };
+function Packages({openPlan}){const [speed,setSpeed]=useState(null),[cat,setCat]=useState(null);const data=plans.filter(p=>(!speed||p.speed===speed)&&(!cat||p.category===cat));return <ScrollView contentContainerStyle={styles.page}><Text style={styles.eyebrow}>PAKET</Text><Text style={styles.title}>Pilih paket internet.</Text><Text style={styles.sub}>Filter berdasarkan kecepatan atau kebutuhan.</Text><Text style={styles.label}>Kecepatan</Text><View style={styles.chips}>{[5,10,15,30,50,100].map(s=><Pressable key={s} onPress={()=>setSpeed(speed===s?null:s)} style={[styles.chip,speed===s&&styles.chipActive]}><Text>{s} Mbps</Text></Pressable>)}</View><Text style={styles.label}>Kebutuhan</Text><View style={styles.chips}>{["Basic","Family","Streaming","Gaming"].map(c=><Pressable key={c} onPress={()=>setCat(cat===c?null:c)} style={[styles.chip,cat===c&&styles.chipActive]}><Text>{c}</Text></Pressable>)}</View>{data.map(p=><Pressable key={p.id} onPress={()=>openPlan(p)} style={styles.product}><View><Text style={styles.productName}>{p.name}</Text><Text style={styles.productSpeed}>{p.speed} Mbps</Text><Text style={styles.sub}>{p.benefit}</Text></View><Text style={styles.productPriceBig}>{money(p.price)}</Text></Pressable>)}</ScrollView>}
 
-  const tabs = useMemo(() => [
-    ["home", "Beranda"], ["services", "Layanan"], ["network", "Jaringan"], ["contact", "Kontak"]
-  ], []);
+function Orders({orders,cancelOrder}){return <ScrollView contentContainerStyle={styles.page}><Text style={styles.eyebrow}>PESANAN</Text><Text style={styles.title}>Riwayat pesanan</Text>{orders.length===0?<Empty text="Belum ada pesanan."/>:orders.map(o=><Card key={o.id}><View style={styles.row}><Text style={styles.cardTitle}>{o.order_number}</Text><Pill tone={o.status==="cancelled"?"red":"blue"}>{statusLabel(o.status)}</Pill></View><Text style={styles.sub}>{o.plan_name} • {o.speed_mbps} Mbps</Text><Text style={styles.meta}>{money(o.amount)} • {o.address}</Text>{o.payment_status==="pending"&&o.status!=="cancelled"?<Button secondary onPress={()=>cancelOrder(o.id)}>BATALKAN PESANAN</Button>:null}</Card>)}</ScrollView>}
 
-  return (
-    <SafeAreaView style={styles.safe}>
-      <StatusBar barStyle="light-content" backgroundColor="#05070b"/>
-      <View style={styles.root}>
-        <View style={styles.header}>
-          <Pressable onPress={() => setScreen("home")}><Text style={styles.logo}>TSCS</Text><Text style={styles.company}>PT. TIGA SERANGKAI CAHAYA SELATAN</Text></Pressable>
-          <Pressable style={styles.headerButton} onPress={() => openWeb("/kontak")}><Text style={styles.headerButtonText}>KONSULTASI</Text></Pressable>
-        </View>
+function Bills({bills}){return <ScrollView contentContainerStyle={styles.page}><Text style={styles.eyebrow}>TAGIHAN</Text><Text style={styles.title}>Tagihan & pembayaran</Text><Card><Text style={styles.meta}>Total tagihan</Text><Text style={styles.total}>{money(bills.reduce((a,b)=>a+Number(b.amount||0),0))}</Text><Text style={styles.meta}>Auto-payment dapat diaktifkan pada pengaturan akun.</Text></Card>{bills.length===0?<Empty text="Belum ada tagihan."/>:bills.map(b=><Card key={b.id}><View style={styles.row}><Text style={styles.cardTitle}>{money(b.amount)}</Text><Pill tone={b.status==="paid"?"green":"blue"}>{statusLabel(b.status)}</Pill></View><Text style={styles.sub}>Jatuh tempo: {b.due_date}</Text><Button secondary onPress={()=>Alert.alert("Pembayaran", "Ringkasan tagihan akan ditampilkan sebelum memilih metode pembayaran.")}>LIHAT TAGIHAN</Button></Card>)}</ScrollView>}
 
-        <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-          {screen === "home" && <>
-            <Text style={styles.eyebrow}>TELECOMMUNICATION • FIBER OPTIC</Text>
-            <Text style={styles.hero}>Koneksi yang <Text style={styles.italic}>Menggerakkan.</Text></Text>
-            <Text style={styles.hero}>Infrastruktur yang <Text style={styles.italic}>Menguatkan.</Text></Text>
-            <Text style={styles.lead}>Konektivitas fiber optic dan solusi jaringan modern untuk membangun infrastruktur digital yang cepat, stabil, dan siap berkembang.</Text>
-            <Pressable style={styles.primary} onPress={() => setScreen("contact")}><Text style={styles.primaryText}>MULAI KONSULTASI  →</Text></Pressable>
-            <View style={styles.networkVisual}><View style={styles.core}><Text style={styles.coreText}>TSCS</Text></View>{[0,1,2,3,4].map(i=><View key={i} style={[styles.node,{top:30+i*48,left:i%2?190:55}]}/>)}</View>
-            <Text style={styles.sectionEyebrow}>OUR SERVICES</Text><Text style={styles.sectionTitle}>Layanan yang Menghubungkan Bisnis Anda.</Text>
-            {services.slice(0,3).map(([t,d,p])=><Card key={t} title={t} text={d} onPress={() => openWeb(p)}/>)}
-          </>}
+function Account({user,profile,setProfile,setScreen,admin,setAdmin,onLogin}){return <ScrollView contentContainerStyle={styles.page}><Text style={styles.eyebrow}>AKUN</Text><Text style={styles.title}>Dashboard pelanggan</Text>{!user?<><Text style={styles.sub}>Masuk untuk mengelola pesanan, layanan, dan tagihan.</Text><Button onPress={onLogin}>MASUK / DAFTAR</Button></>:<><Card><Text style={styles.cardTitle}>{profile.name||"Pelanggan TSCS"}</Text><Text style={styles.sub}>{user.phone||profile.phone||"Nomor HP terverifikasi"}</Text><Text style={styles.meta}>{profile.email||"Email belum ditambahkan"}</Text></Card><Text style={styles.section}>Profil</Text><TextInput placeholder="Nama" value={profile.name} onChangeText={v=>setProfile({...profile,name:v})} style={styles.input}/><TextInput placeholder="Email" value={profile.email} onChangeText={v=>setProfile({...profile,email:v})} style={styles.input}/><Text style={styles.section}>Pengaturan</Text>{["Notifikasi","Bahasa","Tema aplikasi","PIN transaksi","Biometrik","Perangkat yang login"].map(x=><View key={x} style={styles.setting}><Text>{x}</Text><Text style={styles.muted}>›</Text></View>)}{admin&&<Button secondary onPress={()=>setScreen("admin")}>DASHBOARD ADMIN</Button>}<Button secondary onPress={async()=>{await supabase.auth.signOut();setProfile({name:"",email:"",phone:"",address:""});setScreen("choose")}}>LOGOUT</Button></>}</ScrollView>}
 
-          {screen === "services" && <>
-            <Text style={styles.eyebrow}>OUR SERVICES</Text><Text style={styles.sectionTitle}>Solusi konektivitas TSCS.</Text>
-            {services.map(([t,d,p])=><Card key={t} title={t} text={d} onPress={() => openWeb(p)}/>)}
-            <Pressable style={styles.secondary} onPress={() => openWeb("/layanan")}><Text style={styles.secondaryText}>LIHAT SEMUA LAYANAN</Text></Pressable>
-          </>}
+function AdminView({orders,bills,onBack}){return <Shell onBack={onBack}><ScrollView contentContainerStyle={styles.page}><Text style={styles.eyebrow}>ADMIN TSCS</Text><Text style={styles.title}>Dashboard operasional</Text><View style={styles.stats}>{[["Pesanan",orders.length],["Pembayaran",orders.filter(o=>o.payment_status==="paid").length],["Pelanggan","—"],["Layanan aktif","—"]].map(x=><Card key={x[0]}><Text style={styles.meta}>{x[0]}</Text><Text style={styles.stat}>{x[1]}</Text></Card>)}</View><Text style={styles.section}>Pesanan terbaru</Text>{orders.slice(0,8).map(o=><Card key={o.id}><View style={styles.row}><Text style={styles.cardTitle}>{o.order_number}</Text><Pill>{statusLabel(o.status)}</Pill></View><Text style={styles.sub}>{o.plan_name} • {money(o.amount)}</Text><View style={styles.chips}>{["pending","processing","installation","completed","cancelled"].map(s=><Pressable key={s} style={styles.smallChip} onPress={()=>Alert.alert("Status admin", "Perubahan status akan terhubung ke Supabase setelah endpoint admin diaktifkan.")}><Text>{statusLabel(s)}</Text></Pressable>)}</View></Card>)}</ScrollView></Shell>}
 
-          {screen === "network" && <>
-            <Text style={styles.eyebrow}>NETWORK / COVERAGE</Text><Text style={styles.sectionTitle}>Jaringan yang Menjangkau Lebih Jauh.</Text>
-            <View style={styles.networkPanel}><Text style={styles.panelTitle}>NETWORK</Text><Text style={styles.panelText}>Cek ketersediaan jaringan dan infrastruktur TSCS melalui halaman coverage kami.</Text></View>
-            <Pressable style={styles.primary} onPress={() => openWeb("/jaringan")}><Text style={styles.primaryText}>CEK KETERSEDIAAN  →</Text></Pressable>
-          </>}
-
-          {screen === "contact" && <>
-            <Text style={styles.eyebrow}>LET'S CONNECT</Text><Text style={styles.sectionTitle}>Bangun koneksi bersama TSCS.</Text>
-            <Text style={styles.lead}>Sampaikan kebutuhan konektivitas, infrastruktur, atau solusi jaringan bisnis Anda.</Text>
-            <Pressable style={styles.primary} onPress={() => openWeb("/kontak")}><Text style={styles.primaryText}>BUKA FORM KONSULTASI  →</Text></Pressable>
-            <Pressable style={styles.secondary} onPress={() => Linking.openURL("mailto:info@tscs-telecom.com")}><Text style={styles.secondaryText}>EMAIL TSCS</Text></Pressable>
-          </>}
-        </ScrollView>
-
-        <View style={styles.tabbar}>{tabs.map(([id,label])=><Pressable key={id} style={styles.tab} onPress={() => setScreen(id)}><View style={[styles.dot, screen===id && styles.activeDot]}/><Text style={[styles.tabText, screen===id && styles.activeTab]}>{label}</Text></Pressable>)}</View>
-        {loading && <View style={styles.loading}><ActivityIndicator color="#fff"/></View>}
-      </View>
-    </SafeAreaView>
-  );
-}
+function Bottom({tab,setTab}){return <View style={styles.bottom}>{[["home","Beranda"],["packages","Paket"],["orders","Pesanan"],["bills","Tagihan"],["account","Akun"]].map(x=><Pressable key={x[0]} onPress={()=>setTab(x[0])} style={styles.nav}><View style={[styles.navDot,tab===x[0]&&styles.navDotActive]}/><Text style={[styles.navText,tab===x[0]&&styles.navTextActive]}>{x[1]}</Text></Pressable>)}</View>}
+function Shell({children,onBack}){return <SafeAreaView style={styles.safe}><StatusBar barStyle="dark-content" backgroundColor={COLORS.bg}/><View style={styles.root}>{onBack?<View style={styles.top}><Pressable onPress={onBack}><Text style={styles.back}>‹</Text></Pressable><Text style={styles.topLogo}>TSCS</Text><View style={{width:32}}/></View>:<View style={styles.top}><Text style={styles.topLogo}>TSCS</Text><View/></View>}{children}</View></SafeAreaView>}
+function Empty({text}){return <Card><Text style={styles.sub}>{text}</Text></Card>}
 
 const styles=StyleSheet.create({
- safe:{flex:1,backgroundColor:"#05070b"},root:{flex:1,backgroundColor:"#05070b"},header:{height:78,paddingHorizontal:20,flexDirection:"row",alignItems:"center",justifyContent:"space-between",borderBottomWidth:1,borderBottomColor:"#171c24"},logo:{fontSize:25,fontWeight:"900",letterSpacing:5,color:"#fff"},company:{fontSize:7,letterSpacing:1,color:"#737b89",marginTop:2},headerButton:{borderWidth:1,borderColor:"#39404d",paddingHorizontal:12,paddingVertical:9,borderRadius:4},headerButtonText:{color:"#fff",fontSize:9,fontWeight:"700",letterSpacing:1},content:{padding:24,paddingBottom:110},eyebrow:{color:"#788291",fontSize:9,fontWeight:"700",letterSpacing:2,marginBottom:18},hero:{fontSize:35,lineHeight:41,fontWeight:"700",color:"#f5f7fa"},italic:{fontStyle:"italic",color:"#cdd3dc"},lead:{fontSize:15,lineHeight:24,color:"#929aa7",marginTop:18,marginBottom:22},primary:{backgroundColor:"#f2f4f7",padding:16,borderRadius:4,alignItems:"center",marginBottom:25},primaryText:{fontSize:10,fontWeight:"900",letterSpacing:1,color:"#080a0e"},secondary:{borderWidth:1,borderColor:"#353c47",padding:15,borderRadius:4,alignItems:"center",marginTop:8},secondaryText:{color:"#fff",fontSize:10,fontWeight:"800",letterSpacing:1},networkVisual:{height:190,borderWidth:1,borderColor:"#202632",borderRadius:8,marginBottom:36,marginTop:8,position:"relative",overflow:"hidden",backgroundColor:"#080b11"},core:{position:"absolute",top:65,left:"43%",width:70,height:70,borderRadius:35,borderWidth:1,borderColor:"#788291",alignItems:"center",justifyContent:"center"},coreText:{color:"#fff",fontWeight:"900",letterSpacing:2},node:{position:"absolute",width:7,height:7,borderRadius:4,backgroundColor:"#dfe4ea"},sectionEyebrow:{color:"#788291",fontSize:9,fontWeight:"700",letterSpacing:2,marginBottom:10},sectionTitle:{fontSize:28,lineHeight:35,fontWeight:"700",color:"#f5f7fa",marginBottom:22},card:{borderWidth:1,borderColor:"#252c36",borderRadius:6,padding:19,marginBottom:12,backgroundColor:"#090c12"},pressed:{opacity:.7},cardLine:{width:28,height:2,backgroundColor:"#aeb5bf",marginBottom:18},cardTitle:{fontSize:18,fontWeight:"700",color:"#fff",marginBottom:7},cardText:{fontSize:13,lineHeight:20,color:"#8e97a4",marginBottom:16},explore:{fontSize:9,fontWeight:"800",letterSpacing:1.5,color:"#cfd5dd"},networkPanel:{height:230,borderWidth:1,borderColor:"#252c36",borderRadius:8,marginBottom:22,padding:22,justifyContent:"flex-end",backgroundColor:"#080b11"},panelTitle:{fontSize:12,fontWeight:"900",letterSpacing:3,color:"#fff",marginBottom:8},panelText:{fontSize:14,lineHeight:21,color:"#8e97a4"},tabbar:{position:"absolute",bottom:0,left:0,right:0,height:72,backgroundColor:"#080a0f",borderTopWidth:1,borderTopColor:"#1c222b",flexDirection:"row",justifyContent:"space-around",paddingTop:10},tab:{alignItems:"center",width:"25%"},dot:{width:4,height:4,borderRadius:2,backgroundColor:"#555d69",marginBottom:7},activeDot:{backgroundColor:"#fff",width:5,height:5},tabText:{fontSize:9,color:"#656e7b"},activeTab:{color:"#fff",fontWeight:"700"},loading:{...StyleSheet.absoluteFillObject,backgroundColor:"rgba(5,7,11,.75)",alignItems:"center",justifyContent:"center"}
+safe:{flex:1,backgroundColor:COLORS.bg},root:{flex:1,backgroundColor:COLORS.bg},top:{height:58,paddingHorizontal:20,flexDirection:"row",alignItems:"center",justifyContent:"space-between",borderBottomWidth:1,borderBottomColor:COLORS.line,backgroundColor:"#fff"},topLogo:{fontSize:23,fontWeight:"900",letterSpacing:4,color:COLORS.text},back:{fontSize:34,color:COLORS.text},page:{padding:20,paddingBottom:105},center:{flex:1,padding:24,justifyContent:"center"},brand:{fontSize:34,fontWeight:"900",letterSpacing:5,color:COLORS.blue,marginBottom:18},eyebrow:{fontSize:10,fontWeight:"800",letterSpacing:2,color:COLORS.blue,marginBottom:10},title:{fontSize:30,lineHeight:37,fontWeight:"800",color:COLORS.text,marginBottom:10},sub:{fontSize:14,lineHeight:21,color:COLORS.muted},meta:{fontSize:12,lineHeight:18,color:COLORS.muted,marginTop:8},typeRow:{gap:12,marginTop:24},typeCard:{backgroundColor:"#fff",borderWidth:1,borderColor:COLORS.line,borderRadius:16,padding:20},typeIcon:{fontSize:32,color:COLORS.blue,marginBottom:12},typeTitle:{fontSize:20,fontWeight:"800",color:COLORS.text,marginBottom:5},card:{backgroundColor:COLORS.card,borderWidth:1,borderColor:COLORS.line,borderRadius:14,padding:17,marginBottom:12},cardTitle:{fontSize:16,fontWeight:"800",color:COLORS.text},button:{backgroundColor:COLORS.blue,paddingVertical:15,paddingHorizontal:18,borderRadius:11,alignItems:"center",marginTop:14},buttonText:{color:"#fff",fontSize:11,fontWeight:"900",letterSpacing:1},buttonSecondary:{backgroundColor:"#fff",borderWidth:1,borderColor:"#cbd6e5"},buttonSecondaryText:{color:COLORS.text},disabled:{opacity:.55},pressed:{opacity:.7},input:{backgroundColor:"#fff",borderWidth:1,borderColor:COLORS.line,borderRadius:11,paddingHorizontal:14,paddingVertical:13,fontSize:15,color:COLORS.text,marginTop:12},textarea:{minHeight:110,textAlignVertical:"top"},error:{color:COLORS.red,marginTop:12},success:{color:COLORS.green,fontWeight:"700",marginTop:12},promo:{backgroundColor:COLORS.blue,borderRadius:18,padding:20,marginBottom:24},promoTag:{color:"#cfe1ff",fontSize:9,fontWeight:"900",letterSpacing:2},promoTitle:{color:"#fff",fontSize:27,fontWeight:"800",marginTop:8},promoText:{color:"#dce9ff",fontSize:14,marginTop:6},section:{fontSize:20,fontWeight:"800",color:COLORS.text,marginTop:12,marginBottom:12},product:{backgroundColor:"#fff",borderWidth:1,borderColor:COLORS.line,borderRadius:14,padding:17,marginBottom:10,flexDirection:"row",justifyContent:"space-between",gap:14},productName:{fontSize:17,fontWeight:"800",color:COLORS.text},productSpeed:{fontSize:22,fontWeight:"900",color:COLORS.blue,marginVertical:3},productPrice:{fontSize:10,color:COLORS.muted},productPriceBig:{fontSize:17,fontWeight:"900",color:COLORS.text},availability:{backgroundColor:"#fff",borderRadius:16,padding:18,borderWidth:1,borderColor:COLORS.line,marginTop:10},chips:{flexDirection:"row",flexWrap:"wrap",gap:8,marginBottom:12},chip:{backgroundColor:"#fff",borderWidth:1,borderColor:COLORS.line,paddingHorizontal:13,paddingVertical:9,borderRadius:20},chipActive:{backgroundColor:COLORS.blue2,borderColor:"#a9c8ff"},smallChip:{backgroundColor:COLORS.blue2,paddingHorizontal:8,paddingVertical:7,borderRadius:8},speed:{fontSize:25,fontWeight:"900",color:COLORS.blue,marginBottom:4},price:{fontSize:23,fontWeight:"900",color:COLORS.text,marginBottom:18},month:{fontSize:13,fontWeight:"500",color:COLORS.muted},toggle:{flexDirection:"row",backgroundColor:"#e9eef5",padding:4,borderRadius:11,marginVertical:15},toggleItem:{flex:1,padding:12,alignItems:"center",borderRadius:8},toggleActive:{backgroundColor:"#fff"},label:{fontSize:12,fontWeight:"800",color:COLORS.text,marginTop:16,marginBottom:8},coverageRow:{padding:14,backgroundColor:"#ecf9f2",borderRadius:10},method:{backgroundColor:"#fff",borderWidth:1,borderColor:COLORS.line,borderRadius:12,padding:15,marginBottom:9},methodActive:{borderColor:COLORS.blue,backgroundColor:COLORS.blue2},total:{fontSize:30,fontWeight:"900",color:COLORS.text,marginTop:4},pill:{backgroundColor:COLORS.blue2,borderRadius:20,paddingHorizontal:9,paddingVertical:6},pillText:{fontSize:10,fontWeight:"800",color:COLORS.blue},pillGreen:{backgroundColor:"#eaf8f0"},pillGreenText:{color:COLORS.green},pillRed:{backgroundColor:"#fff0f0"},pillRedText:{color:COLORS.red},row:{flexDirection:"row",justifyContent:"space-between",alignItems:"center",gap:8},successIcon:{width:74,height:74,borderRadius:37,backgroundColor:"#eaf8f0",color:COLORS.green,textAlign:"center",textAlignVertical:"center",fontSize:42,fontWeight:"900",marginBottom:20},setting:{backgroundColor:"#fff",padding:16,borderBottomWidth:1,borderBottomColor:COLORS.line,flexDirection:"row",justifyContent:"space-between"},muted:{color:COLORS.muted},stats:{gap:2},stat:{fontSize:27,fontWeight:"900",color:COLORS.blue,marginTop:6},bottom:{position:"absolute",left:0,right:0,bottom:0,height:74,backgroundColor:"#fff",borderTopWidth:1,borderTopColor:COLORS.line,flexDirection:"row",justifyContent:"space-around",paddingTop:10},nav:{alignItems:"center",width:"20%"},navDot:{width:5,height:5,borderRadius:3,backgroundColor:"#b3bdca",marginBottom:7},navDotActive:{backgroundColor:COLORS.blue,width:7,height:7},navText:{fontSize:9,color:COLORS.muted},navTextActive:{color:COLORS.blue,fontWeight:"800"}
 });
