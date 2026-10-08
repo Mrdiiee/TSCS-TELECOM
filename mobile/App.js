@@ -34,6 +34,7 @@ export default function App(){
   const [phone,setPhone]=useState("");
   const [otp,setOtp]=useState("");
   const [authMode,setAuthMode]=useState("login");
+  const [authReturn,setAuthReturn]=useState("app");
   const [user,setUser]=useState(null);
   const [plans,setPlans]=useState(defaultPlans);
   const [promos,setPromos]=useState([]);
@@ -50,11 +51,13 @@ export default function App(){
   const [changeService,setChangeService]=useState(null);
   const [selectedOrder,setSelectedOrder]=useState(null);
 
-  useEffect(()=>{ supabase.auth.getSession().then(({data})=>{setUser(data.session?.user||null);setAdmin(data.session?.user?.app_metadata?.role==="admin");}); const {data}=supabase.auth.onAuthStateChange((_e,s)=>{setUser(s?.user||null);setAdmin(s?.user?.app_metadata?.role==="admin");}); return ()=>data.subscription.unsubscribe(); },[]);
+  useEffect(()=>{ let mounted=true; const syncAdmin=async(sessionUser)=>{ if(!sessionUser){if(mounted)setAdmin(false);return;} const role=sessionUser.app_metadata?.role; if(role==="admin"){if(mounted)setAdmin(true);return;} const {data}=await supabase.from("admin_users").select("id").eq("user_id",sessionUser.id).limit(1); if(mounted)setAdmin(!!(data&&data.length)); }; supabase.auth.getSession().then(({data})=>{if(!mounted)return; setUser(data.session?.user||null); syncAdmin(data.session?.user||null);}); const {data}=supabase.auth.onAuthStateChange((_e,s)=>{setUser(s?.user||null);syncAdmin(s?.user||null);}); return ()=>{mounted=false;data.subscription.unsubscribe();}; },[]);
+  useEffect(()=>{ loadCoverageAreas(); },[]);
   useEffect(()=>{ if(user) loadData(); },[user,admin]);
   useEffect(()=>{ AsyncStorage.getItem("tscs_profile").then(v=>{if(v) setProfile(JSON.parse(v));}); },[]);
   useEffect(()=>{ AsyncStorage.setItem("tscs_profile",JSON.stringify(profile)); },[profile]);
 
+  async function loadCoverageAreas(){ const {data}=await supabase.from("coverage_areas").select("*").order("region_name"); if(data)setCoverageAreas(data); }
   async function loadData(){
     const {data:o}=admin ? await supabase.rpc("admin_list_orders") : await supabase.from("orders").select("*").order("created_at",{ascending:false});
     const {data:b}=await supabase.from("bills").select("*").order("due_date",{ascending:true});
@@ -74,26 +77,31 @@ export default function App(){
   }
   async function verifyOtp(){
     setLoading(true); const {data,error:e}=await supabase.auth.verifyOtp({phone:phone.replace(/\s/g,""),token:otp,type:"sms"}); setLoading(false);
-    if(e){setError(e.message);return} setUser(data.user); setScreen("app");
+    if(e){setError(e.message);return} setUser(data.user); await loadData(); if(authReturn==="checkout"){setCheckoutStep(2);setScreen("checkout");}else{setScreen("app");}
   }
   async function requestLocation(){
-    setError(""); const p=await Location.requestForegroundPermissionsAsync();
-    if(p.status!=="granted"){setError("Izin lokasi belum diberikan.");return}
-    const pos=await Location.getCurrentPositionAsync({accuracy:Location.Accuracy.Balanced});
-    setLocation({lat:pos.coords.latitude,lng:pos.coords.longitude});
-    const g=await Location.reverseGeocodeAsync({latitude:pos.coords.latitude,longitude:pos.coords.longitude});
-    const region=[g?.[0]?.district,g?.[0]?.subregion,g?.[0]?.city,g?.[0]?.region].filter(Boolean).join(", ");
-    const match=coverageAreas.find(x=>region.toLowerCase().includes(x.region_name.toLowerCase())||x.region_name.toLowerCase().includes(region.toLowerCase()));
-    setCoverage(match?.is_available?"available":"unavailable");
+    try{
+      setError(""); setCoverage(null);
+      const p=await Location.requestForegroundPermissionsAsync();
+      if(p.status!=="granted"){setError("Izin lokasi belum diberikan.");return}
+      const pos=await Location.getCurrentPositionAsync({accuracy:Location.Accuracy.Balanced});
+      setLocation({lat:pos.coords.latitude,lng:pos.coords.longitude});
+      const g=await Location.reverseGeocodeAsync({latitude:pos.coords.latitude,longitude:pos.coords.longitude});
+      const region=[g?.[0]?.district,g?.[0]?.subregion,g?.[0]?.city,g?.[0]?.region].filter(Boolean).join(", ");
+      if(!region){setError("Wilayah lokasi tidak dapat dikenali.");return}
+      const match=coverageAreas.find(x=>region.toLowerCase().includes(String(x.region_name||"").toLowerCase())||String(x.region_name||"").toLowerCase().includes(region.toLowerCase()));
+      setCoverage(match?.is_available?"available":"unavailable");
+    }catch(e){setCoverage(null);setError("Lokasi belum dapat diperiksa. Pastikan GPS aktif lalu coba lagi.");}
   }
   async function createOrder(){
     if(!user){setScreen("auth");return}
     if(!selected){return} if(!profile.name||!profile.phone||!profile.email||!profile.address){setError("Lengkapi nama, nomor WhatsApp, email, dan alamat pemasangan.");return}
     setLoading(true); const orderId=uid();
-    const payload={order_number:orderId,user_id:user.id,customer_type:customerType,plan_id:selected.id,plan_name:selected.name,speed_mbps:selected.speed,amount:selected.price,total_amount:selected.price,billing_type:paymentType,payment_method:paymentMethod,address:profile.address,installation_address:profile.address,status:"pending",payment_status:"pending",latitude:location?.lat||null,longitude:location?.lng||null};
+    const activePromo=promos.find(p=>p.product_id===selected.id); const discount=activePromo ? (activePromo.discount_type==="percent" ? Number(selected.price)*Number(activePromo.discount_value||0)/100 : Number(activePromo.discount_value||0)) : 0; const installationFee=Number(selected.installationFee||0); const totalAmount=Math.max(0,Number(selected.price)+installationFee-discount); const payload={order_number:orderId,user_id:user.id,customer_type:customerType,plan_id:selected.id,plan_name:selected.name,speed_mbps:selected.speed,amount:totalAmount,total_amount:totalAmount,billing_type:paymentType,payment_method:paymentMethod,address:profile.address,installation_address:profile.address,status:"pending",payment_status:"pending",latitude:location?.lat||null,longitude:location?.lng||null};
     const {data,error:e}=await supabase.from("orders").insert(payload).select().single();
     if(e){setLoading(false);setError(e.message);return}
-    await supabase.from("bills").insert({user_id:user.id,order_id:data.id,invoice_number:"INV-"+orderId,customer_name:profile.name,package_name:selected.name,period:"Bulan pertama",amount:selected.price,status:"unpaid",due_date:new Date(Date.now()+86400000).toISOString()});
+    const {error:billError}=await supabase.from("bills").insert({user_id:user.id,order_id:data.id,invoice_number:"INV-"+orderId,customer_name:profile.name,package_name:selected.name,period:"Bulan pertama",amount:totalAmount,status:"unpaid",due_date:new Date(Date.now()+86400000).toISOString()});
+    if(billError){await supabase.from("orders").delete().eq("id",data.id).eq("user_id",user.id).eq("payment_status","pending");setLoading(false);setError("Pesanan tidak dapat dibuat karena tagihan gagal dibuat. Silakan coba lagi.");return}
     const pay=await supabase.functions.invoke("midtrans-create-token",{body:{order_id:data.id}});
     setLoading(false);setOrders(x=>[data,...x]);
     if(pay.data?.redirect_url){await Linking.openURL(pay.data.redirect_url);}
@@ -101,8 +109,10 @@ export default function App(){
     setScreen("success");
   }
   async function cancelOrder(id){
-    const {data,error:e}=await supabase.from("orders").update({status:"cancelled"}).eq("id",id).eq("user_id",user.id).eq("payment_status","pending").select().single();
-    if(!e&&data)setOrders(x=>x.map(o=>o.id===id?data:o));
+    const {data,error:e}=await supabase.from("orders").update({status:"cancelled"}).eq("id",id).eq("user_id",user.id).eq("payment_status","pending").eq("status","pending").select().single();
+    if(e){Alert.alert("Gagal membatalkan pesanan","Pesanan belum dapat dibatalkan. Silakan coba lagi.");return false}
+    if(data){setOrders(x=>x.map(o=>o.id===id?data:o));Alert.alert("Pesanan dibatalkan","Pesanan berhasil dibatalkan.");return true}
+    Alert.alert("Pesanan tidak ditemukan","Status pesanan mungkin sudah berubah.");return false
   }
   function chooseType(t){setCustomerType(t);setScreen("app");setTab("home")}
   function openPlan(p){setSelected(p);setCheckoutStep(1);setScreen("detail")}
@@ -116,7 +126,7 @@ export default function App(){
 
   if(screen==="detail"&&selected) return <Shell onBack={home}><View style={styles.page}><Text style={styles.eyebrow}>DETAIL PAKET</Text><Text style={styles.title}>{selected.name}</Text><Text style={styles.speed}>{selected.speed} Mbps</Text><Text style={styles.price}>Mulai dari {money(selected.price)}<Text style={styles.month}> / bulan</Text></Text><Card><Text style={styles.cardTitle}>Benefit</Text><Text style={styles.sub}>{selected.benefit}</Text><Text style={styles.meta}>Biaya pemasangan dan ketentuan akan ditampilkan saat checkout.</Text></Card><View style={styles.toggle}><Pressable onPress={()=>setPaymentType("prabayar")} style={[styles.toggleItem,paymentType==="prabayar"&&styles.toggleActive]}><Text>PRABAYAR</Text></Pressable><Pressable onPress={()=>setPaymentType("pascabayar")} style={[styles.toggleItem,paymentType==="pascabayar"&&styles.toggleActive]}><Text>PASCABAYAR</Text></Pressable></View><Button onPress={()=>{setCheckoutStep(1);setScreen("checkout")}}>PILIH PAKET</Button></View></Shell>;
 
-  if(screen==="checkout"&&selected) return <Shell onBack={()=>setScreen("detail")}><View style={styles.page}><Text style={styles.eyebrow}>CHECKOUT • {checkoutStep}/4</Text>{checkoutStep===1&&<><Text style={styles.title}>Data pribadi</Text><TextInput placeholder="Nama lengkap" value={profile.name} onChangeText={v=>setProfile({...profile,name:v})} style={styles.input}/><TextInput placeholder="Nomor HP" value={profile.phone} onChangeText={v=>setProfile({...profile,phone:v})} keyboardType="phone-pad" style={styles.input}/><TextInput placeholder="Email" value={profile.email} onChangeText={v=>setProfile({...profile,email:v})} keyboardType="email-address" style={styles.input}/><Button onPress={()=>user?setCheckoutStep(2):setScreen("auth")}>LANJUTKAN</Button></>}{checkoutStep===2&&<><Text style={styles.title}>Alamat pemasangan</Text><Button secondary onPress={requestLocation}>GUNAKAN LOKASI SAYA</Button>{location?<Text style={styles.success}>Lokasi GPS tersimpan.</Text>:null}<TextInput placeholder="Alamat lengkap pemasangan" value={profile.address} onChangeText={v=>setProfile({...profile,address:v})} multiline style={[styles.input,styles.textarea]}/><Button onPress={()=>{setCoverage(null);setCheckoutStep(3)}}>LANJUTKAN</Button></>}{checkoutStep===3&&<><Text style={styles.title}>Detail pemasangan</Text><Card><Text style={styles.cardTitle}>{selected.name} • {paymentType}</Text><Text style={styles.sub}>{money(selected.price)} / bulan</Text><Text style={styles.meta}>Lokasi: {profile.address||"Belum diisi"}</Text></Card><Text style={styles.label}>Status jaringan</Text><View style={styles.coverageRow}><Text style={styles.success}>● Jaringan tersedia</Text></View><Button onPress={()=>setCheckoutStep(4)}>LANJUTKAN</Button></>}{checkoutStep===4&&<><Text style={styles.title}>Pembayaran</Text><Card><Text style={styles.cardTitle}>Total</Text><Text style={styles.total}>{money(selected.price)}</Text><Text style={styles.meta}>Metode yang dipilih hanya dicatat pada pesanan sampai payment gateway TSCS dihubungkan.</Text></Card>{["qris","virtual_account","ewallet"].map(m=><Pressable key={m} onPress={()=>setPaymentMethod(m)} style={[styles.method,paymentMethod===m&&styles.methodActive]}><Text style={styles.cardTitle}>{m==="qris"?"QRIS":m==="virtual_account"?"Virtual Account":"E-Wallet"}</Text><Text style={styles.sub}>{paymentMethod===m?"Dipilih":"Pilih metode"}</Text></Pressable>)}<Button onPress={createOrder} disabled={loading}>{loading?"MEMBUAT PESANAN...":"KONFIRMASI PESANAN"}</Button></>}{error?<Text style={styles.error}>{error}</Text>:null}</View></Shell>;
+  if(screen==="checkout"&&selected) return <Shell onBack={()=>setScreen("detail")}><View style={styles.page}><Text style={styles.eyebrow}>CHECKOUT • {checkoutStep}/4</Text>{checkoutStep===1&&<><Text style={styles.title}>Data pribadi</Text><TextInput placeholder="Nama lengkap" value={profile.name} onChangeText={v=>setProfile({...profile,name:v})} style={styles.input}/><TextInput placeholder="Nomor HP" value={profile.phone} onChangeText={v=>setProfile({...profile,phone:v})} keyboardType="phone-pad" style={styles.input}/><TextInput placeholder="Email" value={profile.email} onChangeText={v=>setProfile({...profile,email:v})} keyboardType="email-address" style={styles.input}/><Button onPress={()=>{if(user){setCheckoutStep(2)}else{setAuthReturn("checkout");setScreen("auth")}}}>LANJUTKAN</Button></>}{checkoutStep===2&&<><Text style={styles.title}>Alamat pemasangan</Text><Button secondary onPress={requestLocation}>GUNAKAN LOKASI SAYA</Button>{location?<Text style={styles.success}>Lokasi GPS tersimpan.</Text>:null}<TextInput placeholder="Alamat lengkap pemasangan" value={profile.address} onChangeText={v=>setProfile({...profile,address:v})} multiline style={[styles.input,styles.textarea]}/><Button onPress={()=>{setCoverage(null);setCheckoutStep(3)}}>LANJUTKAN</Button></>}{checkoutStep===3&&<><Text style={styles.title}>Detail pemasangan</Text><Card><Text style={styles.cardTitle}>{selected.name} • {paymentType}</Text><Text style={styles.sub}>{money(selected.price)} / bulan</Text><Text style={styles.meta}>Lokasi: {profile.address||"Belum diisi"}</Text></Card><Text style={styles.label}>Status jaringan</Text>{coverage==="available"?<><View style={styles.coverageRow}><Text style={styles.success}>● Jaringan tersedia</Text></View><Button onPress={()=>setCheckoutStep(4)}>LANJUTKAN</Button></>:coverage==="unavailable"?<><View style={[styles.coverageRow,{backgroundColor:"#fff0f0"}]}><Text style={styles.error}>● Jaringan belum tersedia di wilayah ini.</Text></View><Text style={styles.meta}>Pesanan tidak dapat dilanjutkan sebelum wilayah pemasangan tersedia.</Text><Button secondary onPress={()=>setCheckoutStep(2)}>UBAH ALAMAT</Button></>:<><View style={styles.coverageRow}><Text style={styles.meta}>Status jaringan belum diperiksa.</Text></View><Button secondary onPress={()=>{setCheckoutStep(2);requestLocation()}}>CEK KETERSEDIAAN</Button></>}</>}{checkoutStep===4&&<><Text style={styles.title}>Pembayaran</Text><Card><Text style={styles.cardTitle}>Total</Text><Text style={styles.meta}>Harga paket: {money(selected.price)}</Text><Text style={styles.meta}>Biaya pemasangan: {money(selected.installationFee||0)}</Text>{discount>0?<Text style={styles.meta}>Diskon promo: -{money(discount)}</Text>:null}<Text style={styles.total}>{money(Math.max(0,Number(selected.price)+Number(selected.installationFee||0)-discount))}</Text><Text style={styles.meta}>Metode yang dipilih hanya dicatat pada pesanan sampai payment gateway TSCS dihubungkan.</Text></Card>{["qris","virtual_account","ewallet"].map(m=><Pressable key={m} onPress={()=>setPaymentMethod(m)} style={[styles.method,paymentMethod===m&&styles.methodActive]}><Text style={styles.cardTitle}>{m==="qris"?"QRIS":m==="virtual_account"?"Virtual Account":"E-Wallet"}</Text><Text style={styles.sub}>{paymentMethod===m?"Dipilih":"Pilih metode"}</Text></Pressable>)}<Button onPress={createOrder} disabled={loading}>{loading?"MEMBUAT PESANAN...":"KONFIRMASI PESANAN"}</Button></>}{error?<Text style={styles.error}>{error}</Text>:null}</View></Shell>;
 
   if(screen==="success") return <Shell><View style={styles.center}><Text style={styles.successIcon}>✓</Text><Text style={styles.title}>Pesanan berhasil dibuat.</Text><Text style={styles.sub}>Pesanan tercatat dan menunggu pembayaran.</Text><Button onPress={()=>{setScreen("app");setTab("orders")}}>LIHAT PESANAN</Button><Button secondary onPress={home}>KEMBALI KE BERANDA</Button></View></Shell>;
 
