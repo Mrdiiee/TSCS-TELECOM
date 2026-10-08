@@ -39,7 +39,17 @@ jobs:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
           EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL }}
           EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
-        run: npx eas-cli build --platform android --profile preview --non-interactive
+        run: npx eas-cli build --platform android --profile preview --non-interactive --no-wait
+
+      - name: Wait for EAS build
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: |
+          for i in $(seq 1 60); do
+            STATUS=$(npx eas-cli build:list --platform android --status finished --limit 1 --json | node -e "let s=\"\";process.stdin.on(\"data\",d=>s+=d).on(\"end\",()=>{const a=JSON.parse(s);console.log(a[0]?.status||\"\")})")
+            [ "$STATUS" = "FINISHED" ] && break
+            sleep 20
+          done
 
       - name: Download APK from EAS
         env:
