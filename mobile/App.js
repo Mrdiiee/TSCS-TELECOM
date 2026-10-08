@@ -52,10 +52,12 @@ export default function App(){
   const [selectedOrder,setSelectedOrder]=useState(null);
 
   useEffect(()=>{ let mounted=true; const syncAdmin=async(sessionUser)=>{ if(!sessionUser){if(mounted)setAdmin(false);return;} const role=sessionUser.app_metadata?.role; if(role==="admin"){if(mounted)setAdmin(true);return;} const {data}=await supabase.from("admin_users").select("id").eq("user_id",sessionUser.id).limit(1); if(mounted)setAdmin(!!(data&&data.length)); }; supabase.auth.getSession().then(({data})=>{if(!mounted)return; setUser(data.session?.user||null); syncAdmin(data.session?.user||null);}); const {data}=supabase.auth.onAuthStateChange((_e,s)=>{setUser(s?.user||null);syncAdmin(s?.user||null);}); return ()=>{mounted=false;data.subscription.unsubscribe();}; },[]);
+  useEffect(()=>{ loadCoverageAreas(); },[]);
   useEffect(()=>{ if(user) loadData(); },[user,admin]);
   useEffect(()=>{ AsyncStorage.getItem("tscs_profile").then(v=>{if(v) setProfile(JSON.parse(v));}); },[]);
   useEffect(()=>{ AsyncStorage.setItem("tscs_profile",JSON.stringify(profile)); },[profile]);
 
+  async function loadCoverageAreas(){ const {data}=await supabase.from("coverage_areas").select("*").order("region_name"); if(data)setCoverageAreas(data); }
   async function loadData(){
     const {data:o}=admin ? await supabase.rpc("admin_list_orders") : await supabase.from("orders").select("*").order("created_at",{ascending:false});
     const {data:b}=await supabase.from("bills").select("*").order("due_date",{ascending:true});
