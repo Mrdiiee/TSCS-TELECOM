@@ -94,7 +94,11 @@ export default function App(){
     const {data,error:e}=await supabase.from("orders").insert(payload).select().single();
     if(e){setLoading(false);setError(e.message);return}
     await supabase.from("bills").insert({user_id:user.id,order_id:data.id,invoice_number:"INV-"+orderId,customer_name:profile.name,package_name:selected.name,period:"Bulan pertama",amount:selected.price,status:"unpaid",due_date:new Date(Date.now()+86400000).toISOString()});
-    setLoading(false);setOrders(x=>[data,...x]);setScreen("success");
+    const pay=await supabase.functions.invoke("midtrans-create-token",{body:{order_id:data.id}});
+    setLoading(false);setOrders(x=>[data,...x]);
+    if(pay.data?.redirect_url){await Linking.openURL(pay.data.redirect_url);}
+    else if(pay.error){Alert.alert("Pesanan dibuat","Pesanan tersimpan. Pembayaran online belum aktif atau belum dikonfigurasi.");}
+    setScreen("success");
   }
   async function cancelOrder(id){
     const {data,error:e}=await supabase.from("orders").update({status:"cancelled"}).eq("id",id).eq("user_id",user.id).eq("payment_status","pending").select().single();
