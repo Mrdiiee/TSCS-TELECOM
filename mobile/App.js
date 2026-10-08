@@ -42,7 +42,7 @@ export default function App(){
   const [admin,setAdmin]=useState(false);
   const [loading,setLoading]=useState(false);
   const [error,setError]=useState("");
-  const [activeServices,setActiveServices]=useState([]);
+  const [activeServices,setActiveServices]=useState([]); const [changeRequests,setChangeRequests]=useState([]); const [changeService,setChangeService]=useState(null);
   const [changeRequests,setChangeRequests]=useState([]);
   const [changeService,setChangeService]=useState(null);
   const [selectedOrder,setSelectedOrder]=useState(null);
@@ -56,9 +56,9 @@ export default function App(){
     const {data:o}=admin
       ? await supabase.rpc("admin_list_orders")
       : await supabase.from("orders").select("*").order("created_at",{ascending:false});
-    const {data:b}=await supabase.from("bills").select("*").order("due_date",{ascending:true});
+    const {data:b}=await supabase.from("bills").select("*").order("due_date",{ascending:true}); const {data:r}=admin?await supabase.rpc("admin_list_package_change_requests"):await supabase.from("package_change_requests").select("*").order("created_at",{ascending:false});
     const {data:r}=admin ? await supabase.rpc("admin_list_package_change_requests") : await supabase.from("package_change_requests").select("*").order("created_at",{ascending:false});
-    if(o) setOrders(o); if(b) setBills(b); if(r) setChangeRequests(r);
+    if(o) setOrders(o); if(b) setBills(b); if(r) setChangeRequests(r); if(r) setChangeRequests(r);
     if(o) setActiveServices(o.filter(x=>x.status==="completed" && x.payment_status==="paid").map(x=>({id:x.id,name:x.plan_name,speed:x.speed_mbps,amount:x.amount,address:x.address,startedAt:x.created_at,status:"active"})));
   }
 
@@ -95,6 +95,7 @@ export default function App(){
   function openPlan(p){setSelected(p);setCheckoutStep(1);setScreen("detail")}
   function home(){setScreen("app");setTab("home")}
   function openOrder(order){setSelectedOrder(order);setScreen("order-detail")}
+  async function submitPackageChange(target){if(!changeService||!user)return;setLoading(true);const {data,error:e}=await supabase.rpc("create_package_change_request",{p_order_id:changeService.id,p_target_plan_id:target.id,p_target_plan_name:target.name,p_target_speed_mbps:target.speed,p_target_amount:target.price});setLoading(false);if(e){Alert.alert("Pengajuan gagal",e.message);return}if(data)setChangeRequests(x=>[data,...x]);setChangeService(null);setScreen("app");setTab("account");Alert.alert("Pengajuan terkirim","Pengajuan perubahan paket menunggu diproses Admin TSCS.");}
   async function submitPackageChange(target){
     if(!changeService||!user) return;
     setLoading(true); setError("");
