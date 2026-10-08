@@ -13,16 +13,11 @@
     "android": {
       "package": "id.tscstelekom.app",
       "versionCode": 2,
-      "adaptiveIcon": {
-        "foregroundImage": "./assets/icon.png",
-        "backgroundColor": "#100d2d"
-      },
       "permissions": [
         "ACCESS_COARSE_LOCATION",
         "ACCESS_FINE_LOCATION"
       ]
     },
-    "icon": "./assets/icon.png",
     "extra": {
       "eas": {
         "projectId": "2eed682f-7724-44bc-ad8f-f74fcab37066"
