@@ -48,6 +48,8 @@ export default function App(){
   const [error,setError]=useState("");
   const [activeServices,setActiveServices]=useState([]);
   const [changeRequests,setChangeRequests]=useState([]);
+  const activePromo=useMemo(()=>promos.find(p=>p.product_id===selected?.id),[promos,selected]);
+  const discount=useMemo(()=>activePromo ? (activePromo.discount_type==="percent" ? Number(selected?.price||0)*Number(activePromo.discount_value||0)/100 : Number(activePromo.discount_value||0)) : 0,[activePromo,selected]);
   const [changeService,setChangeService]=useState(null);
   const [selectedOrder,setSelectedOrder]=useState(null);
 
@@ -97,7 +99,7 @@ export default function App(){
     if(!user){setScreen("auth");return}
     if(!selected){return} if(!profile.name||!profile.phone||!profile.email||!profile.address){setError("Lengkapi nama, nomor WhatsApp, email, dan alamat pemasangan.");return}
     setLoading(true); const orderId=uid();
-    const activePromo=promos.find(p=>p.product_id===selected.id); const discount=activePromo ? (activePromo.discount_type==="percent" ? Number(selected.price)*Number(activePromo.discount_value||0)/100 : Number(activePromo.discount_value||0)) : 0; const installationFee=Number(selected.installationFee||0); const totalAmount=Math.max(0,Number(selected.price)+installationFee-discount); const payload={order_number:orderId,user_id:user.id,customer_type:customerType,plan_id:selected.id,plan_name:selected.name,speed_mbps:selected.speed,amount:totalAmount,total_amount:totalAmount,billing_type:paymentType,payment_method:paymentMethod,address:profile.address,installation_address:profile.address,status:"pending",payment_status:"pending",latitude:location?.lat||null,longitude:location?.lng||null};
+    const installationFee=Number(selected.installationFee||0); const totalAmount=Math.max(0,Number(selected.price)+installationFee-discount); const payload={order_number:orderId,user_id:user.id,customer_type:customerType,plan_id:selected.id,plan_name:selected.name,speed_mbps:selected.speed,amount:totalAmount,total_amount:totalAmount,billing_type:paymentType,payment_method:paymentMethod,address:profile.address,installation_address:profile.address,status:"pending",payment_status:"pending",latitude:location?.lat||null,longitude:location?.lng||null};
     const {data,error:e}=await supabase.from("orders").insert(payload).select().single();
     if(e){setLoading(false);setError(e.message);return}
     const {error:billError}=await supabase.from("bills").insert({user_id:user.id,order_id:data.id,invoice_number:"INV-"+orderId,customer_name:profile.name,package_name:selected.name,period:"Bulan pertama",amount:totalAmount,status:"unpaid",due_date:new Date(Date.now()+86400000).toISOString()});
