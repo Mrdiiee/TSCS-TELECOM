@@ -7,9 +7,6 @@
     "orientation": "portrait",
     "userInterfaceStyle": "light",
     "scheme": "tscs",
-    "splash": {
-      "backgroundColor": "#05070b"
-    },
     "android": {
       "package": "id.tscstelekom.app",
       "versionCode": 2,
