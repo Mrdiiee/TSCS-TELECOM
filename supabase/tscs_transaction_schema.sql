@@ -266,5 +266,5 @@ $$;
 
 revoke all on function public.admin_list_products() from public;
 grant execute on function public.admin_list_products() to authenticated;
-revoke all on function public.admin_upsert_product(uuid,integer,numeric,text,text,numeric,text,boolean,boolean,text,integer,boolean,boolean) from public;
+revoke all on function public.admin_upsert_product(uuid,text,integer,numeric,text,text,numeric,text,boolean,boolean,text,integer,boolean,boolean) from public;
 grant execute on function public.admin_upsert_product(uuid,text,integer,numeric,text,text,numeric,text,boolean,boolean,text,integer,boolean,boolean) to authenticated;
