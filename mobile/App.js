@@ -109,7 +109,7 @@ export default function App(){
     setScreen("success");
   }
   async function cancelOrder(id){
-    const {data,error:e}=await supabase.from("orders").update({status:"cancelled"}).eq("id",id).eq("user_id",user.id).eq("payment_status","pending").select().single();
+    const {data,error:e}=await supabase.from("orders").update({status:"cancelled"}).eq("id",id).eq("user_id",user.id).eq("payment_status","pending").eq("status","pending").select().single();
     if(e){Alert.alert("Gagal membatalkan pesanan","Pesanan belum dapat dibatalkan. Silakan coba lagi.");return false}
     if(data){setOrders(x=>x.map(o=>o.id===id?data:o));Alert.alert("Pesanan dibatalkan","Pesanan berhasil dibatalkan.");return true}
     Alert.alert("Pesanan tidak ditemukan","Status pesanan mungkin sudah berubah.");return false
