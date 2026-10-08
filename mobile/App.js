@@ -42,7 +42,7 @@ export default function App(){
   const [loading,setLoading]=useState(false);
   const [error,setError]=useState("");
 
-  useEffect(()=>{ supabase.auth.getSession().then(({data})=>setUser(data.session?.user||null)); const {data}=supabase.auth.onAuthStateChange((_e,s)=>setUser(s?.user||null)); return ()=>data.subscription.unsubscribe(); },[]);
+  useEffect(()=>{ supabase.auth.getSession().then(({data})=>{setUser(data.session?.user||null);setAdmin(data.session?.user?.app_metadata?.role==="admin");}); const {data}=supabase.auth.onAuthStateChange((_e,s)=>{setUser(s?.user||null);setAdmin(s?.user?.app_metadata?.role==="admin");}); return ()=>data.subscription.unsubscribe(); },[]);
   useEffect(()=>{ if(user) loadData(); },[user]);
 
   async function loadData(){
