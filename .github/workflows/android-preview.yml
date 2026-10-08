@@ -37,6 +37,8 @@ jobs:
       - name: Build Android preview APK
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+          EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL }}
+          EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
         run: npx eas-cli build --platform android --profile preview --non-interactive
 
       - name: Download APK from EAS
