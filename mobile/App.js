@@ -78,14 +78,18 @@ export default function App(){
     if(e){setError(e.message);return} setUser(data.user); await loadData(); if(authReturn==="checkout"){setCheckoutStep(2);setScreen("checkout");}else{setScreen("app");}
   }
   async function requestLocation(){
-    setError(""); const p=await Location.requestForegroundPermissionsAsync();
-    if(p.status!=="granted"){setError("Izin lokasi belum diberikan.");return}
-    const pos=await Location.getCurrentPositionAsync({accuracy:Location.Accuracy.Balanced});
-    setLocation({lat:pos.coords.latitude,lng:pos.coords.longitude});
-    const g=await Location.reverseGeocodeAsync({latitude:pos.coords.latitude,longitude:pos.coords.longitude});
-    const region=[g?.[0]?.district,g?.[0]?.subregion,g?.[0]?.city,g?.[0]?.region].filter(Boolean).join(", ");
-    const match=coverageAreas.find(x=>region.toLowerCase().includes(x.region_name.toLowerCase())||x.region_name.toLowerCase().includes(region.toLowerCase()));
-    setCoverage(match?.is_available?"available":"unavailable");
+    try{
+      setError(""); setCoverage(null);
+      const p=await Location.requestForegroundPermissionsAsync();
+      if(p.status!=="granted"){setError("Izin lokasi belum diberikan.");return}
+      const pos=await Location.getCurrentPositionAsync({accuracy:Location.Accuracy.Balanced});
+      setLocation({lat:pos.coords.latitude,lng:pos.coords.longitude});
+      const g=await Location.reverseGeocodeAsync({latitude:pos.coords.latitude,longitude:pos.coords.longitude});
+      const region=[g?.[0]?.district,g?.[0]?.subregion,g?.[0]?.city,g?.[0]?.region].filter(Boolean).join(", ");
+      if(!region){setError("Wilayah lokasi tidak dapat dikenali.");return}
+      const match=coverageAreas.find(x=>region.toLowerCase().includes(String(x.region_name||"").toLowerCase())||String(x.region_name||"").toLowerCase().includes(region.toLowerCase()));
+      setCoverage(match?.is_available?"available":"unavailable");
+    }catch(e){setCoverage(null);setError("Lokasi belum dapat diperiksa. Pastikan GPS aktif lalu coba lagi.");}
   }
   async function createOrder(){
     if(!user){setScreen("auth");return}
