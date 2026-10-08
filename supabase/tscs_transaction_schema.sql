@@ -179,61 +179,37 @@ create policy "customers read own package change requests"
 on public.package_change_requests for select using (auth.uid() = user_id);
 
 create or replace function public.create_package_change_request(
-  p_order_id uuid, p_target_plan_id text, p_target_plan_name text,
-  p_target_speed_mbps integer, p_target_amount numeric
+  p_order_id uuid, p_target_plan_id uuid
 )
 returns public.package_change_requests
 language plpgsql security definer set search_path = public
 as $$
-declare current_order public.orders; created_request public.package_change_requests;
+declare
+  current_order public.orders;
+  target_product public.products;
+  created_request public.package_change_requests;
 begin
   select * into current_order from public.orders
   where id=p_order_id and user_id=auth.uid() and status='completed' and payment_status='paid';
   if current_order.id is null then raise exception 'Layanan aktif tidak ditemukan'; end if;
-  if p_target_plan_id=current_order.plan_id then raise exception 'Paket tujuan sama dengan paket saat ini'; end if;
+  select * into target_product from public.products
+  where id=p_target_plan_id and is_active=true;
+  if target_product.id is null then raise exception 'Paket tujuan tidak ditemukan'; end if;
+  if target_product.id::text=current_order.plan_id::text then raise exception 'Paket tujuan sama dengan paket saat ini'; end if;
   if exists(select 1 from public.package_change_requests where order_id=p_order_id and status='pending') then
     raise exception 'Masih ada pengajuan perubahan paket yang sedang diproses';
   end if;
   insert into public.package_change_requests
     (user_id,order_id,current_plan_name,current_speed_mbps,target_plan_id,target_plan_name,target_speed_mbps,target_amount)
   values
-    (auth.uid(),current_order.id,current_order.plan_name,current_order.speed_mbps,p_target_plan_id,p_target_plan_name,p_target_speed_mbps,p_target_amount)
+    (auth.uid(),current_order.id,current_order.plan_name,current_order.speed_mbps,target_product.id::text,target_product.name,target_product.speed_mbps,target_product.price)
   returning * into created_request;
   return created_request;
 end;
 $$;
 
-create or replace function public.admin_list_package_change_requests()
-returns setof public.package_change_requests
-language sql security definer set search_path = public
-as $$
-  select r.* from public.package_change_requests r
-  where public.is_tscs_admin()
-  order by r.created_at desc;
-$$;
-
-create or replace function public.admin_update_package_change_request(p_request_id uuid,p_status text)
-returns public.package_change_requests
-language plpgsql security definer set search_path = public
-as $$
-declare req public.package_change_requests; updated_req public.package_change_requests;
-begin
-  if not public.is_tscs_admin() then raise exception 'Akses admin diperlukan'; end if;
-  if p_status not in ('approved','rejected') then raise exception 'Status pengajuan tidak valid'; end if;
-  select * into req from public.package_change_requests where id=p_request_id;
-  if req.id is null then raise exception 'Pengajuan tidak ditemukan'; end if;
-  if req.status <> 'pending' then raise exception 'Pengajuan sudah diproses'; end if;
-  update public.package_change_requests set status=p_status,processed_at=now() where id=p_request_id returning * into updated_req;
-  if p_status='approved' then
-    update public.orders set plan_id=req.target_plan_id,plan_name=req.target_plan_name,
-      speed_mbps=req.target_speed_mbps,amount=req.target_amount where id=req.order_id;
-  end if;
-  return updated_req;
-end;
-$$;
-
-revoke all on function public.create_package_change_request(uuid,text,text,integer,numeric) from public;
-grant execute on function public.create_package_change_request(uuid,text,text,integer,numeric) to authenticated;
+revoke all on function public.create_package_change_request(uuid,uuid) from public;
+grant execute on function public.create_package_change_request(uuid,uuid) to authenticated;
 revoke all on function public.admin_list_package_change_requests() from public;
 grant execute on function public.admin_list_package_change_requests() to authenticated;
 revoke all on function public.admin_update_package_change_request(uuid,text) from public;
