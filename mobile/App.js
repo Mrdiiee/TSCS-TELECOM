@@ -105,16 +105,7 @@ export default function App(){
   function home(){setScreen("app");setTab("home")}
   function openOrder(order){setSelectedOrder(order);setScreen("order-detail")}
   async function submitPackageChange(target){if(!changeService||!user)return;setLoading(true);const {data,error:e}=await supabase.rpc("create_package_change_request",{p_order_id:changeService.id,p_target_plan_id:target.id});setLoading(false);if(e){Alert.alert("Pengajuan gagal",e.message);return}if(data)setChangeRequests(x=>[data,...x]);setChangeService(null);setScreen("app");setTab("account");Alert.alert("Pengajuan terkirim","Pengajuan perubahan paket menunggu diproses Admin TSCS.");}
-  async function submitPackageChange(target){
-    if(!changeService||!user) return;
-    setLoading(true); setError("");
-    const {data,error:e}=await supabase.rpc("create_package_change_request",{p_order_id:changeService.id,p_target_plan_id:target.id,p_target_plan_name:target.name,p_target_speed_mbps:target.speed,p_target_amount:target.price});
-    setLoading(false);
-    if(e){Alert.alert("Pengajuan gagal",e.message);return}
-    if(data)setChangeRequests(x=>[data,...x]);
-    setChangeService(null); setScreen("app"); setTab("account");
-    Alert.alert("Pengajuan terkirim","Perubahan paket menunggu diproses Admin TSCS.");
-  }
+
 
   if(screen==="choose") return <Shell><View style={styles.center}><Text style={styles.brand}>TSCS</Text><Text style={styles.title}>Internet yang sesuai kebutuhanmu.</Text><Text style={styles.sub}>Pilih jenis layanan untuk melihat paket yang relevan.</Text><View style={styles.typeRow}><Pressable style={styles.typeCard} onPress={()=>chooseType("rumah")}><Text style={styles.typeIcon}>⌂</Text><Text style={styles.typeTitle}>Rumah</Text><Text style={styles.sub}>Internet untuk rumah & personal.</Text></Pressable><Pressable style={styles.typeCard} onPress={()=>chooseType("bisnis")}><Text style={styles.typeIcon}>▦</Text><Text style={styles.typeTitle}>Bisnis</Text><Text style={styles.sub}>Konektivitas untuk kebutuhan bisnis.</Text></Pressable></View></View></Shell>;
   if(screen==="auth") return <Shell><View style={styles.page}><Text style={styles.eyebrow}>AKUN TSCS</Text><Text style={styles.title}>Masuk dengan nomor HP.</Text><Text style={styles.sub}>Kami akan mengirim OTP untuk memverifikasi akun.</Text>{authMode==="login"&&<><TextInput value={phone} onChangeText={setPhone} placeholder="+62 8xxxxxxxx" keyboardType="phone-pad" style={styles.input}/><Button onPress={sendOtp} disabled={loading}>{loading?"MENGIRIM...":"KIRIM OTP"}</Button></>}{authMode==="verify"&&<><TextInput value={otp} onChangeText={setOtp} placeholder="Kode OTP" keyboardType="number-pad" style={styles.input}/><Button onPress={verifyOtp} disabled={loading}>{loading?"MEMVERIFIKASI...":"VERIFIKASI OTP"}</Button><Button secondary onPress={()=>setAuthMode("login")}>GANTI NOMOR</Button></>}{error?<Text style={styles.error}>{error}</Text>:null}</View></Shell>;
