@@ -223,3 +223,48 @@ revoke all on function public.admin_list_package_change_requests() from public;
 grant execute on function public.admin_list_package_change_requests() to authenticated;
 revoke all on function public.admin_update_package_change_request(uuid,text) from public;
 grant execute on function public.admin_update_package_change_request(uuid,text) to authenticated;
+
+
+create or replace function public.admin_list_products()
+returns setof public.products
+language sql security definer set search_path = public
+as $$
+  select p.* from public.products p
+  where coalesce(auth.jwt() -> 'app_metadata' ->> 'role','')='admin'
+  order by p.display_order asc, p.created_at asc;
+$$;
+
+create or replace function public.admin_upsert_product(
+  p_id uuid, p_name text, p_speed_mbps integer, p_price numeric,
+  p_category text, p_benefit text, p_installation_fee numeric,
+  p_fup text, p_prepaid_enabled boolean, p_postpaid_enabled boolean,
+  p_label text, p_display_order integer, p_is_recommended boolean, p_is_active boolean
+)
+returns public.products
+language plpgsql security definer set search_path = public
+as $$
+declare result_product public.products;
+begin
+  if coalesce(auth.jwt() -> 'app_metadata' ->> 'role','') <> 'admin' then
+    raise exception 'Akses admin diperlukan';
+  end if;
+  if p_id is null then
+    insert into public.products(name,speed_mbps,price,category,benefit,installation_fee,fup,prepaid_enabled,postpaid_enabled,label,display_order,is_recommended,is_active)
+    values(p_name,p_speed_mbps,p_price,p_category,p_benefit,p_installation_fee,p_fup,p_prepaid_enabled,p_postpaid_enabled,p_label,p_display_order,p_is_recommended,p_is_active)
+    returning * into result_product;
+  else
+    update public.products set name=p_name,speed_mbps=p_speed_mbps,price=p_price,category=p_category,
+      benefit=p_benefit,installation_fee=p_installation_fee,fup=p_fup,prepaid_enabled=p_prepaid_enabled,
+      postpaid_enabled=p_postpaid_enabled,label=p_label,display_order=p_display_order,
+      is_recommended=p_is_recommended,is_active=p_is_active
+    where id=p_id returning * into result_product;
+  end if;
+  if result_product.id is null then raise exception 'Produk tidak ditemukan'; end if;
+  return result_product;
+end;
+$$;
+
+revoke all on function public.admin_list_products() from public;
+grant execute on function public.admin_list_products() to authenticated;
+revoke all on function public.admin_upsert_product(uuid,text,integer,numeric,text,text,numeric,text,boolean,boolean,text,integer,boolean,boolean) from public;
+grant execute on function public.admin_upsert_product(uuid,text,integer,numeric,text,text,numeric,text,boolean,boolean,text,integer,boolean,boolean) to authenticated;
