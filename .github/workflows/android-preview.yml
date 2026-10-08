@@ -2,6 +2,8 @@ name: Android Preview APK
 
 on:
   workflow_dispatch:
+  push:
+    branches: ["main"]
 
 permissions:
   contents: read
@@ -45,7 +47,7 @@ jobs:
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
         run: |
-          for i in $(seq 1 60); do
+          for i in $(seq 1 90); do
             STATUS=$(npx eas-cli build:list --platform android --status finished --limit 1 --json | node -e "let s=\"\";process.stdin.on(\"data\",d=>s+=d).on(\"end\",()=>{const a=JSON.parse(s);console.log(a[0]?.status||\"\")})")
             [ "$STATUS" = "FINISHED" ] && break
             sleep 20
