@@ -91,3 +91,53 @@ values
 ('Family 10',10,200000,'Family','Nyaman untuk keluarga dan beberapa perangkat.',2,true),
 ('Streaming 15',15,250000,'Streaming','Lebih nyaman untuk streaming dan hiburan rumah.',3,true)
 on conflict do nothing;
+
+
+-- Admin order operations.
+-- Access is restricted to users whose Supabase app_metadata role is "admin".
+create or replace function public.admin_list_orders()
+returns setof public.orders
+language sql
+security definer
+set search_path = public
+as $$
+  select o.*
+  from public.orders o
+  where coalesce(auth.jwt() -> 'app_metadata' ->> 'role','') = 'admin'
+  order by o.created_at desc;
+$$;
+
+create or replace function public.admin_update_order_status(p_order_id uuid, p_status text)
+returns public.orders
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  updated_order public.orders;
+begin
+  if coalesce(auth.jwt() -> 'app_metadata' ->> 'role','') <> 'admin' then
+    raise exception 'Akses admin diperlukan';
+  end if;
+
+  if p_status not in ('pending','processing','installation','completed','cancelled') then
+    raise exception 'Status pesanan tidak valid';
+  end if;
+
+  update public.orders
+  set status = p_status
+  where id = p_order_id
+  returning * into updated_order;
+
+  if updated_order.id is null then
+    raise exception 'Pesanan tidak ditemukan';
+  end if;
+
+  return updated_order;
+end;
+$$;
+
+revoke all on function public.admin_list_orders() from public;
+grant execute on function public.admin_list_orders() to authenticated;
+revoke all on function public.admin_update_order_status(uuid,text) from public;
+grant execute on function public.admin_update_order_status(uuid,text) to authenticated;
