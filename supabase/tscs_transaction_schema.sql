@@ -93,6 +93,21 @@ values
 on conflict do nothing;
 
 
+-- Centralized admin authorization.
+create or replace function public.is_tscs_admin()
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $
+  select exists (select 1 from public.admin_users where user_id = auth.uid())
+    or coalesce(auth.jwt() -> 'app_metadata' ->> 'role','') = 'admin';
+$;
+
+revoke all on function public.is_tscs_admin() from public;
+grant execute on function public.is_tscs_admin() to authenticated;
+
 -- Admin order operations.
 -- Access is restricted to users whose Supabase app_metadata role is "admin".
 create or replace function public.admin_list_orders()
@@ -103,7 +118,7 @@ set search_path = public
 as $$
   select o.*
   from public.orders o
-  where coalesce(auth.jwt() -> 'app_metadata' ->> 'role','') = 'admin'
+  where public.is_tscs_admin()
   order by o.created_at desc;
 $$;
 
@@ -116,7 +131,7 @@ as $$
 declare
   updated_order public.orders;
 begin
-  if coalesce(auth.jwt() -> 'app_metadata' ->> 'role','') <> 'admin' then
+  if not public.is_tscs_admin() then
     raise exception 'Akses admin diperlukan';
   end if;
 
@@ -193,7 +208,7 @@ returns setof public.package_change_requests
 language sql security definer set search_path = public
 as $$
   select r.* from public.package_change_requests r
-  where coalesce(auth.jwt() -> 'app_metadata' ->> 'role','')='admin'
+  where public.is_tscs_admin()
   order by r.created_at desc;
 $$;
 
@@ -203,7 +218,7 @@ language plpgsql security definer set search_path = public
 as $$
 declare req public.package_change_requests; updated_req public.package_change_requests;
 begin
-  if coalesce(auth.jwt() -> 'app_metadata' ->> 'role','') <> 'admin' then raise exception 'Akses admin diperlukan'; end if;
+  if not public.is_tscs_admin() then raise exception 'Akses admin diperlukan'; end if;
   if p_status not in ('approved','rejected') then raise exception 'Status pengajuan tidak valid'; end if;
   select * into req from public.package_change_requests where id=p_request_id;
   if req.id is null then raise exception 'Pengajuan tidak ditemukan'; end if;
@@ -230,7 +245,7 @@ returns setof public.products
 language sql security definer set search_path = public
 as $$
   select p.* from public.products p
-  where coalesce(auth.jwt() -> 'app_metadata' ->> 'role','')='admin'
+  where public.is_tscs_admin()
   order by p.display_order asc, p.created_at asc;
 $$;
 
@@ -245,7 +260,7 @@ language plpgsql security definer set search_path = public
 as $$
 declare result_product public.products;
 begin
-  if coalesce(auth.jwt() -> 'app_metadata' ->> 'role','') <> 'admin' then
+  if not public.is_tscs_admin() then
     raise exception 'Akses admin diperlukan';
   end if;
   if p_id is null then
