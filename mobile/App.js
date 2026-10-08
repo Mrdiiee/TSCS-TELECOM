@@ -77,7 +77,7 @@ export default function App(){
   }
 
   function normalizePhone(value){
-    const raw=String(value||"").replace(/[\\s().-]/g,"");
+    const raw=String(value||"").replace(/[\s().-]/g,"");
     if(raw.startsWith("+62")) return raw;
     if(raw.startsWith("62")) return "+"+raw;
     if(raw.startsWith("0")) return "+62"+raw.slice(1);
@@ -104,7 +104,7 @@ export default function App(){
     setError("");
     const normalized=normalizePhone(phone);
     if(!/^\+62[0-9]{8,13}$/.test(normalized)){setError("Nomor HP tidak valid.");return}
-    if(!/^\\d{6}$/.test(String(otp||"").trim())){setError("Masukkan 6 digit kode OTP.");return}
+    if(!/^\d{6}$/.test(String(otp||"").trim())){setError("Masukkan 6 digit kode OTP.");return}
     setLoading(true);
     const {data,error:e}=await supabase.auth.verifyOtp({phone:normalized,token:String(otp).trim(),type:"sms"});
     setLoading(false);
