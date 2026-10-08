@@ -76,14 +76,41 @@ export default function App(){
     if(o) setActiveServices(o.filter(x=>x.status==="completed"&&x.payment_status==="paid").map(x=>({id:x.id,planId:x.plan_id,name:x.plan_name,speed:x.speed_mbps,amount:x.amount,address:x.address,startedAt:x.created_at,status:"active"})));
   }
 
+  function normalizePhone(value){
+    const raw=String(value||"").replace(/[\\s().-]/g,"");
+    if(raw.startsWith("+62")) return raw;
+    if(raw.startsWith("62")) return "+"+raw;
+    if(raw.startsWith("0")) return "+62"+raw.slice(1);
+    return raw;
+  }
   async function sendOtp(){
-    setError(""); if(!/^\+?[0-9]{9,15}$/.test(phone.replace(/\s/g,""))){setError("Masukkan nomor HP yang valid.");return}
-    setLoading(true); const {error:e}=await supabase.auth.signInWithOtp({phone:phone.replace(/\s/g,"")}); setLoading(false);
-    if(e){setError(e.message);return} setAuthMode("verify");
+    setError("");
+    const normalized=normalizePhone(phone);
+    if(!/^\+62[0-9]{8,13}$/.test(normalized)){setError("Nomor HP tidak valid. Gunakan contoh 0812xxxx atau +62812xxxx.");return}
+    setPhone(normalized);
+    setLoading(true);
+    const {error:e}=await supabase.auth.signInWithOtp({phone:normalized,options:{shouldCreateUser:true}});
+    setLoading(false);
+    if(e){
+      const msg=String(e.message||"");
+      if(/provider|sms|twilio|messagebird|vonage/i.test(msg)) setError("OTP SMS belum dapat dikirim. Provider SMS Phone Auth Supabase belum aktif atau belum dikonfigurasi.");
+      else if(/rate limit|too many|60 seconds/i.test(msg)) setError("Terlalu banyak permintaan OTP. Tunggu sebentar lalu coba lagi.");
+      else setError(msg||"Gagal mengirim OTP. Coba lagi.");
+      return;
+    }
+    setAuthMode("verify");
   }
   async function verifyOtp(){
-    setLoading(true); const {data,error:e}=await supabase.auth.verifyOtp({phone:phone.replace(/\s/g,""),token:otp,type:"sms"}); setLoading(false);
-    if(e){setError(e.message);return} setUser(data.user); await loadData(); if(authReturn==="checkout"){setCheckoutStep(2);setScreen("checkout");}else{setScreen("app");}
+    setError("");
+    const normalized=normalizePhone(phone);
+    if(!/^\+62[0-9]{8,13}$/.test(normalized)){setError("Nomor HP tidak valid.");return}
+    if(!/^\\d{6}$/.test(String(otp||"").trim())){setError("Masukkan 6 digit kode OTP.");return}
+    setLoading(true);
+    const {data,error:e}=await supabase.auth.verifyOtp({phone:normalized,token:String(otp).trim(),type:"sms"});
+    setLoading(false);
+    if(e){setError(e.message||"Kode OTP tidak valid atau sudah kedaluwarsa.");return}
+    setPhone(normalized); setUser(data.user); await loadData();
+    if(authReturn==="checkout"){setCheckoutStep(2);setScreen("checkout");}else{setScreen("app");}
   }
   async function requestLocation(){
     try{
@@ -128,7 +155,7 @@ export default function App(){
 
 
   if(screen==="choose") return <Shell><View style={styles.center}><Text style={styles.brand}>TSCS</Text><Text style={styles.title}>Internet yang sesuai kebutuhanmu.</Text><Text style={styles.sub}>Pilih jenis layanan untuk melihat paket yang relevan.</Text><View style={styles.typeRow}><Pressable style={styles.typeCard} onPress={()=>chooseType("rumah")}><Text style={styles.typeIcon}>⌂</Text><Text style={styles.typeTitle}>Rumah</Text><Text style={styles.sub}>Internet untuk rumah & personal.</Text></Pressable><Pressable style={styles.typeCard} onPress={()=>chooseType("bisnis")}><Text style={styles.typeIcon}>▦</Text><Text style={styles.typeTitle}>Bisnis</Text><Text style={styles.sub}>Konektivitas untuk kebutuhan bisnis.</Text></Pressable></View></View></Shell>;
-  if(screen==="auth") return <Shell><View style={styles.page}><Text style={styles.eyebrow}>AKUN TSCS</Text><Text style={styles.title}>Masuk dengan nomor HP.</Text><Text style={styles.sub}>Kami akan mengirim OTP untuk memverifikasi akun.</Text>{authMode==="login"&&<><TextInput value={phone} onChangeText={setPhone} placeholder="+62 8xxxxxxxx" keyboardType="phone-pad" style={styles.input}/><Button onPress={sendOtp} disabled={loading}>{loading?"MENGIRIM...":"KIRIM OTP"}</Button></>}{authMode==="verify"&&<><TextInput value={otp} onChangeText={setOtp} placeholder="Kode OTP" keyboardType="number-pad" style={styles.input}/><Button onPress={verifyOtp} disabled={loading}>{loading?"MEMVERIFIKASI...":"VERIFIKASI OTP"}</Button><Button secondary onPress={()=>setAuthMode("login")}>GANTI NOMOR</Button></>}{error?<Text style={styles.error}>{error}</Text>:null}</View></Shell>;
+  if(screen==="auth") return <Shell><View style={styles.page}><Text style={styles.eyebrow}>AKUN TSCS</Text><Text style={styles.title}>Masuk dengan nomor HP.</Text><Text style={styles.sub}>Kami akan mengirim OTP untuk memverifikasi akun.</Text>{authMode==="login"&&<><TextInput value={phone} onChangeText={setPhone} placeholder="0812xxxx / +62812xxxx" keyboardType="phone-pad" style={styles.input}/><Button onPress={sendOtp} disabled={loading}>{loading?"MENGIRIM...":"KIRIM OTP"}</Button></>}{authMode==="verify"&&<><TextInput value={otp} onChangeText={setOtp} placeholder="Kode OTP" keyboardType="number-pad" style={styles.input}/><Button onPress={verifyOtp} disabled={loading}>{loading?"MEMVERIFIKASI...":"VERIFIKASI OTP"}</Button><Button secondary onPress={()=>setAuthMode("login")}>GANTI NOMOR</Button></>}{error?<Text style={styles.error}>{error}</Text>:null}</View></Shell>;
 
   if(screen==="detail"&&selected) return <Shell onBack={home}><View style={styles.page}><Text style={styles.eyebrow}>DETAIL PAKET</Text><Text style={styles.title}>{selected.name}</Text><Text style={styles.speed}>{selected.speed} Mbps</Text><Text style={styles.price}>Mulai dari {money(selected.price)}<Text style={styles.month}> / bulan</Text></Text><Card><Text style={styles.cardTitle}>Benefit</Text><Text style={styles.sub}>{selected.benefit}</Text><Text style={styles.meta}>Biaya pemasangan dan ketentuan akan ditampilkan saat checkout.</Text></Card><View style={styles.toggle}><Pressable onPress={()=>setPaymentType("prabayar")} style={[styles.toggleItem,paymentType==="prabayar"&&styles.toggleActive]}><Text>PRABAYAR</Text></Pressable><Pressable onPress={()=>setPaymentType("pascabayar")} style={[styles.toggleItem,paymentType==="pascabayar"&&styles.toggleActive]}><Text>PASCABAYAR</Text></Pressable></View><Button onPress={()=>{setCheckoutStep(1);setScreen("checkout")}}>PILIH PAKET</Button></View></Shell>;
 
