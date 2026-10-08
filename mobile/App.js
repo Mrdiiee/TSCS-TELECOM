@@ -15,7 +15,7 @@ const defaultPlans = [
 ];
 
 const money = n => "Rp" + Number(n||0).toLocaleString("id-ID");
-const statusLabel = s => ({pending:"Menunggu pembayaran",processing:"Diproses",installation:"Instalasi",completed:"Selesai",cancelled:"Dibatalkan",paid:"Lunas",active:"Aktif",overdue:"Jatuh tempo"})[s] || s;
+const statusLabel = s => ({pending:"Menunggu pembayaran",processing:"Diproses",installation:"Instalasi",completed:"Selesai",cancelled:"Dibatalkan",paid:"Lunas",active:"Aktif",overdue:"Jatuh tempo",unpaid:"Belum dibayar"})[s] || s;
 const uid = () => "TSCS-" + Date.now().toString(36).toUpperCase();
 
 function Button({children,onPress,secondary=false,disabled=false}){return <Pressable disabled={disabled} onPress={onPress} style={({pressed})=>[styles.button,secondary&&styles.buttonSecondary,disabled&&styles.disabled,pressed&&styles.pressed]}><Text style={[styles.buttonText,secondary&&styles.buttonSecondaryText]}>{children}</Text></Pressable>}
@@ -70,7 +70,8 @@ export default function App(){
     const {data:p}=admin ? await supabase.rpc("admin_list_products") : await supabase.from("products").select("*").eq("is_active",true).order("display_order",{ascending:true});
     const {data:pr}=await supabase.from("promos").select("*").eq("is_active",true).order("display_order",{ascending:true});
     const {data:ca}=await supabase.from("coverage_areas").select("*").order("region_name");
-    if(o) setOrders(o); if(b) setBills(b); if(r) setChangeRequests(r); if(pr) setPromos(pr); if(ca) setCoverageAreas(ca);
+    const livePromos=(pr||[]).filter(p=>!p.starts_at || new Date(p.starts_at).getTime()<=Date.now()).filter(p=>!p.ends_at || new Date(p.ends_at).getTime()>=Date.now());
+    if(o) setOrders(o); if(b) setBills(b); if(r) setChangeRequests(r); if(pr) setPromos(livePromos); if(ca) setCoverageAreas(ca);
     if(p) setPlans(p.map(x=>({id:x.id,name:x.name,speed:x.speed_mbps,price:Number(x.price),category:x.category,benefit:x.benefit||"",popular:!!x.is_recommended,installationFee:Number(x.installation_fee||0),fup:x.fup||"",prepaidEnabled:x.prepaid_enabled,postpaidEnabled:x.postpaid_enabled,label:x.label||"",isActive:x.is_active,displayOrder:x.display_order||0})));
     if(o) setActiveServices(o.filter(x=>x.status==="completed"&&x.payment_status==="paid").map(x=>({id:x.id,planId:x.plan_id,name:x.plan_name,speed:x.speed_mbps,amount:x.amount,address:x.address,startedAt:x.created_at,status:"active"})));
   }
